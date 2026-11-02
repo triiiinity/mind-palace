@@ -1,11 +1,18 @@
-# mind palace
+# + (the plus platform, working name mind palace)
 
-A research room for artists and curious people, in four steps of making something:
+A research room for artists and curious people, in four steps of making something.
+The menu runs down the left column:
 
-1. **remembering** — inspiration list, word web, other artists (explore, lineages), pure art, real image search
-2. **engaging** — image feed, split screen, color picker, obliterate
-3. **creating** — color bank, color machine, idea board, order of operations, commissions
-4. **sharing** — what did you make (your room's name, now listening / watching / reading, progress posts)
+1. **remembering** — inspiration list, other artists, pure art, pure images
+2. **collecting** — image feed, color picker, splitscreen, obliterate
+3. **creating** — color bank (with the color machine in a pop-up), idea board, order of operations, progress tracker
+4. **posting** — profile, notes
+
+Every idea on the idea board is an ascii plant: connect it to a list on order of operations and each
+step checked off waters it (seed → sprout → seedling → bud → flower → ready to harvest). Forgotten
+ideas get thirsty and shrink. The plants follow you along the bottom of every page.
+
+The grid is the theme: click any empty white space and it shows through. The cursor drops gray plus signs.
 
 It points people off the site toward real things: museum collections, official sites and foundations,
 Wikipedia, and credited real photographs instead of AI-generated image search results.
@@ -15,10 +22,10 @@ Wikipedia, and credited real photographs instead of AI-generated image search re
 - `room.js` — every page of the room
 - `room-data.js` — starting lists in plain text: artists, lineages, nature words, your room's name, "now" list, starting lists, inspiration prompts
 - `room.css` — the room's look; `style.css` — the base look (copied from the portfolio, change freely)
-- `base.js` — the + at the top, the left menu, the picture viewer, and `PORTFOLIO` (where your own 2026 work is read from)
+- `base.js` — the + at the top, the left menu (MENU), the grid on click (GRID_SIZE), the plus cursor (PLUS_CURSOR), the picture viewer, and `PORTFOLIO` (where your own work on the profile comes from)
 - `wrangler.jsonc` — tells Cloudflare to serve this folder
 
-Everything added on the page is saved in the browser you used. "backup" / "restore" at the bottom of 2 · image feed moves it between computers.
+Everything added on the page is saved in the browser you used. "backup" / "restore" at the bottom of the image feed moves it between computers.
 
 ## on Cloudflare
 Workers & Pages → Create → Import a repository → `mind-palace` → Deploy. Every push to GitHub redeploys.

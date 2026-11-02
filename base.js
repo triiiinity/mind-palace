@@ -4,8 +4,8 @@
    The room itself is room.js; its starting lists are room-data.js.
    ============================================================ */
 
-/* the name across the top of the page. just a + for now.
-   (the site is mind palace: see the <title> line of index.html) */
+/* the name across the top of the page: the plus platform, just a + for now.
+   (click it to go to the home page) */
 const SITE_NAME = "+";
 
 /* where your own work comes from: your portfolio site. The strip of 2026
@@ -15,11 +15,23 @@ const SITE_NAME = "+";
    line in index.html). */
 const PORTFOLIO = "https://trinitylester.trinityl-lester.workers.dev";
 
-/* the menu on the left. add pages here as the site grows. */
+/* the menu on the left: the four steps, in order. Each link is a page of
+   the room (the part after # in the address). Add or rename pages here. */
 const MENU = [
-  { label: "mind palace", href: "index.html" },
-  { label: "trinity lester ↗", href: PORTFOLIO, external: true }
+  { step: "1 remembering", pages: [["bin", "inspiration list"], ["artists", "other artists"], ["pure", "pure art"], ["nature", "pure images"]] },
+  { step: "2 collecting", pages: [["collection", "image feed"], ["picker", "color picker"], ["split", "splitscreen"], ["obliterate", "obliterate"]] },
+  { step: "3 creating", pages: [["bank", "color bank"], ["ideas", "idea board"], ["order", "order of operations"], ["progress", "progress tracker"]] },
+  { step: "4 posting", pages: [["share", "profile"], ["notes", "notes"]] }
 ];
+
+/* THE CURSOR: gray plus signs falling from the mouse. false = off. */
+const PLUS_CURSOR = true;
+const PLUS_SHADES = ["#4a4a4a", "#666666", "#808080", "#999999", "#b3b3b3", "#cccccc"];
+
+/* THE GRID: click any empty white space and the grid shows through.
+   GRID_SIZE = size of each square in pixels; GRID_STAYS = seconds it stays. */
+const GRID_SIZE = 28;
+const GRID_STAYS = 4;
 
 /* ---------- YOUR WORKS (from the portfolio) ---------- */
 
@@ -44,11 +56,69 @@ function currentPage() {
 function renderHeader() {
   const header = document.getElementById("site-header");
   if (!header) return;
-  const here = currentPage().replace(/\.html$/, "");
-  const items = MENU.map((m) =>
-    `<a href="${m.href}"${m.external ? ' target="_blank" rel="noopener"' : ""} class="${m.href.replace(/\.html$/, "") === here || (here === "index" && m.href === "index.html") ? "current" : ""}">${m.label}</a>`
-  ).join("");
-  header.innerHTML = `<div class="name-bar"><a href="index.html">${SITE_NAME}</a></div><nav>${items}</nav>`;
+  const items = MENU.map((m) => `<div class="menu-step"><span class="menu-label">${m.step}</span>${m.pages.map(([k, label]) =>
+    `<a href="#${k}" data-page="${k}">${label}</a>`).join("")}</div>`).join("");
+  header.innerHTML = `<div class="name-bar"><a href="#home">${SITE_NAME}</a></div><nav class="menu">${items}</nav>`;
+  markMenu();
+  window.addEventListener("hashchange", markMenu);
+}
+
+// underline the page you're on
+function markMenu() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  const page = h.startsWith("artist/") ? "artists" : h;
+  document.querySelectorAll("#site-header [data-page]").forEach((a) => a.classList.toggle("current", a.dataset.page === page));
+}
+
+/* ---------- THE GRID: shows through wherever you click on empty space ---------- */
+
+function startGrid() {
+  const layer = document.createElement("div");
+  layer.className = "grid-layer";
+  layer.style.setProperty("--grid", GRID_SIZE + "px");
+  document.body.appendChild(layer);
+  let timer = null, raf = null;
+  const BUSY = "a, button, input, textarea, select, label, canvas, img, pre, summary, [contenteditable], .rm-tile, .rm-panel, #lightbox, .rm-cpop";
+  document.addEventListener("click", (e) => {
+    if (e.target.closest && e.target.closest(BUSY)) return;
+    if (window.getSelection && String(window.getSelection())) return;      // selecting text isn't a click on the white
+    const x = e.clientX, y = e.clientY, far = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+    layer.style.setProperty("--gx", x + "px"); layer.style.setProperty("--gy", y + "px");
+    layer.classList.add("on");
+    cancelAnimationFrame(raf);
+    const t0 = performance.now();
+    const grow = (t) => {           // the grid opens out from where you clicked
+      const k = Math.min(1, (t - t0) / 700), r = far * (1 - Math.pow(1 - k, 3));
+      layer.style.setProperty("--gr", r + "px");
+      if (k < 1) raf = requestAnimationFrame(grow);
+    };
+    raf = requestAnimationFrame(grow);
+    clearTimeout(timer);
+    timer = setTimeout(() => layer.classList.remove("on"), GRID_STAYS * 1000);
+  });
+}
+
+/* ---------- THE CURSOR: plus signs falling from the mouse ---------- */
+
+function startPlusCursor() {
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  let last = 0;
+  document.addEventListener("mousemove", (e) => {
+    const now = performance.now();
+    if (now - last < 45) return;                                       // a few at a time, not a flood
+    if (e.target.closest && e.target.closest("canvas")) return;          // not while drawing or picking colors
+    last = now;
+    const p = document.createElement("span");
+    p.className = "fallplus";
+    p.textContent = "+";
+    p.style.left = e.clientX + "px"; p.style.top = e.clientY + "px";
+    p.style.color = PLUS_SHADES[Math.floor(Math.random() * PLUS_SHADES.length)];
+    p.style.setProperty("--dx", (Math.random() * 24 - 12).toFixed(1) + "px");
+    p.style.setProperty("--dy", (34 + Math.random() * 40).toFixed(1) + "px");
+    p.style.fontSize = (10 + Math.random() * 6).toFixed(0) + "px";
+    p.addEventListener("animationend", () => p.remove());
+    document.body.appendChild(p);
+  });
 }
 
 /* ---------- THE PICTURE VIEWER (click a picture: it opens big) ----------
@@ -131,4 +201,6 @@ function step(d) {
 document.addEventListener("DOMContentLoaded", () => {
   renderHeader();
   buildLightbox();
+  startGrid();
+  if (PLUS_CURSOR) startPlusCursor();
 });

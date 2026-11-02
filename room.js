@@ -64,6 +64,9 @@
   let colors = store.get("colors", []);                   // picked colors: {id, hex, side, from:{title, artist, thumb}}
   let combos = store.get("combos", []);                   // saved color combinations: {id, name, hexes, layout}
   let lists = store.get("lists", null) || (R.STARTING_LISTS || []).map((l) => ({ id: uid(), name: l.name, items: l.items.map((t) => ({ id: uid(), t, done: false })) }));
+  let gardenReady = false;                                // the garden (bottom of the page) draws once everything is set up
+  let goals = store.get("goals", []);                     // progress tracker: {id, name, start, end, days:{date:true}}
+  let notes = store.get("notes", null) || [{ id: uid(), title: "notes", text: "", draw: "" }];
   let share = store.get("share", null) || { roomName: R.ROOM_NAME || "my room", artist: true, instagram: "", now: (R.NOW || []).map((x) => ({ ...x })), posts: [] };
 
   function saveAll() {
@@ -71,7 +74,8 @@
     store.set("collection", collection); store.set("ideas", ideas); store.set("commissions", commissions);
     store.set("palace", palace); store.set("legend", legend);
     store.set("natureTags", natureTags); store.set("colors", colors); store.set("combos", combos);
-    store.set("lists", lists); store.set("share", share);
+    store.set("lists", lists); store.set("share", share); store.set("goals", goals); store.set("notes", notes);
+    if (gardenReady) drawGarden();
   }
 
   const isMine = (name) => mine.some((m) => plain(m.name) === plain(name));
@@ -259,42 +263,25 @@
      FRAME + ROUTES
      ============================================================ */
 
-  /* the menu: the four steps of making something, each a little box with a dropdown */
+  /* the four steps. The menu itself is in the left column (base.js); these feed the home page. */
   const STEPS = [
-    { n: 1, label: "remembering", line: "everything you carry around", pages: [["bin", "inspiration list"], ["web", "word web"], ["artists", "other artists"], ["explore", "explore"], ["lineages", "lineages"], ["pure", "pure art"], ["nature", "real image search"]] },
-    { n: 2, label: "engaging", line: "when you start to make something from what you remember", pages: [["collection", "image feed"], ["split", "split screen"], ["picker", "color picker"], ["obliterate", "obliterate"]] },
-    { n: 3, label: "creating", line: "now you should have an idea", pages: [["bank", "color bank"], ["colors", "color machine"], ["ideas", "idea board"], ["order", "order of operations"], ["commissions", "commissions"]] },
-    { n: 4, label: "sharing", line: "what did you make", pages: [["share", "what did you make"]] }
+    { n: 1, label: "remembering", line: "everything you carry around", pages: [["bin", "inspiration list"], ["artists", "other artists"], ["pure", "pure art"], ["nature", "pure images"]] },
+    { n: 2, label: "collecting", line: "gathering what you remember", pages: [["collection", "image feed"], ["picker", "color picker"], ["split", "splitscreen"], ["obliterate", "obliterate"]] },
+    { n: 3, label: "creating", line: "now you should have an idea", pages: [["bank", "color bank"], ["ideas", "idea board"], ["order", "order of operations"], ["progress", "progress tracker"]] },
+    { n: 4, label: "posting", line: "what did you make", pages: [["share", "profile"], ["notes", "notes"]] }
   ];
-  const PAGES = STEPS.flatMap((st) => st.pages.map(([k]) => k)).concat("home", "palace");
+  const PAGES = STEPS.flatMap((st) => st.pages.map(([k]) => k)).concat("home");
 
   root.innerHTML = `
-    <div class="rm-mywork" id="rm-mywork"></div>
-    <nav class="rm-stepnav" id="rm-stepnav">${STEPS.map((st) => `
-      <div class="rm-step" data-n="${st.n}">
-        <button type="button" class="rm-num" aria-label="step ${st.n}: ${st.label}">${st.n}</button>
-        <span class="rm-steplabel"></span>
-        <div class="rm-drop"><span class="rm-why">${st.n} · ${st.label}<br><i>${st.line}</i></span>${st.pages.map(([k, label]) => `<a href="#${k}" data-page="${k}">${label}</a>`).join("")}</div>
-      </div>`).join("")}</nav>
     <section id="rm-view"></section>
     <aside class="rm-panel" id="rm-panel" hidden></aside>`;
-
-  // tap a number to open its dropdown (hover works too); tap anywhere else to close
-  const nav = $("rm-stepnav");
-  nav.querySelectorAll(".rm-num").forEach((b) => b.addEventListener("click", (e) => {
-    const step = b.parentElement, was = step.classList.contains("open");
-    nav.querySelectorAll(".rm-step").forEach((x) => x.classList.remove("open"));
-    step.classList.toggle("open", !was);
-    e.stopPropagation();
-  }));
-  document.addEventListener("click", (e) => { if (!e.target.closest(".rm-step")) nav.querySelectorAll(".rm-step").forEach((x) => x.classList.remove("open")); });
 
   /* your 2026 work: a strip of small pictures across the top of every room page.
      Newest first (the last lines in works.js). Click one to see it big. */
   // works come from your portfolio site (see PORTFOLIO in base.js); small copies live in its images/thumbs/ folder
   const thumbOf = (file) => String(file).replace(/(^|\/)images\//, "$1images/thumbs/").replace(/\.[a-z0-9]+$/i, ".webp");
-  function drawMyWork() {
-    const box = $("rm-mywork");
+  function drawMyWork(box) {
+    if (!box) return;
     if (!share.artist) { box.hidden = true; box.innerHTML = ""; return; }
     box.hidden = false;
     const list = (typeof worksWithTags === "function" ? worksWithTags([String(R.MY_WORK_TAG || "2026")]) : []).slice().reverse();
@@ -307,27 +294,20 @@
       if (typeof openLightbox === "function") openLightbox(list, +b.dataset.i);
     }));
   }
-  drawMyWork();
-
   function route() {
     const h = decodeURIComponent(location.hash.slice(1));
     const isArtist = h.startsWith("artist/");
     const page = isArtist ? "artists" : PAGES.includes(h) ? h : "home";
-    nav.querySelectorAll(".rm-step").forEach((stEl) => {
-      const st = STEPS.find((x) => x.n === +stEl.dataset.n);
-      const hit = st.pages.find(([k]) => k === page);
-      stEl.classList.toggle("current", !!hit);
-      stEl.classList.remove("open");
-      stEl.querySelector(".rm-steplabel").textContent = hit ? (isArtist ? h.slice(7) : hit[1]) : "";
-      stEl.querySelectorAll("a").forEach((a) => a.classList.toggle("current", a.dataset.page === page));
-    });
     closePanel();
     root.classList.toggle("on-web", page === "web");
     root.classList.toggle("on-bank", page === "bank");
     root.dataset.page = page;
     if (isArtist) showArtist(h.slice(7));
-    else ({ home: showHome, pure: showPure, picker: showPicker, obliterate: showObliterate, bank: showBank, order: showOrder, share: showShare, artists: showArtists, explore: showExplore, lineages: showLineages, collection: showCollection, nature: showNature,
-            split: showSplit, colors: showColors, palace: showPalace, bin: showBin, web: showWeb, ideas: showIdeas, commissions: showCommissions })[page]();
+    else ({ home: showHome, pure: showPure, picker: showPicker, obliterate: showObliterate, bank: showBank, order: showOrder, share: showShare,
+            artists: showArtists, collection: showCollection, nature: showNature, split: showSplit, bin: showBin, ideas: showIdeas,
+            progress: showProgress, notes: showNotes })[page]();
+    closeMachine();
+    drawGarden();
     window.scrollTo(0, 0);
   }
   window.addEventListener("hashchange", route);
@@ -904,7 +884,7 @@
         <span>order <select id="rm-border"><option value="new">newest first</option><option value="az">a to z</option><option value="group">by group</option></select></span>
         <span class="rm-why">${palace.words.length} words</span>
       </div>
-      <p class="rm-why">everything that could ever inspire you: one word is enough (the grid, moss, alaska, audrey hepburn). each word opens on wikipedia; hover to see it. ◦ finds it on the word web.</p>
+      <p class="rm-why">everything that could ever inspire you: one word is enough (the grid, moss, alaska, audrey hepburn). each word opens on wikipedia; hover to see it.</p>
       <div class="rm-bin" id="rm-bin"></div>
       <div class="rm-prompts" id="rm-prompts"></div>`;
     wordBar($("rm-bbar"), (t) => { const a = addWords(t); showBin(); return a; });
@@ -912,7 +892,6 @@
     $("rm-border").addEventListener("change", (e) => { store.set("binOrder", e.target.value); showBin(); });
     const row = (w) => `<li>
         <a class="rm-bword" data-word="${esc(w.label)}" href="${esc(w.url || "https://en.wikipedia.org/wiki/Special:Search?search=" + encodeURIComponent(w.label))}" target="_blank" rel="noopener">${esc(w.label)}</a>
-        <button type="button" class="rm-bweb" data-go="${w.id}" title="find it on the word web">◦</button>
         <select class="rm-bgroup" data-id="${w.id}" aria-label="group">${GROUPS.map((g) => `<option${g === w.type ? " selected" : ""}>${g}</option>`).join("")}</select>
         <span class="rm-why rm-bdate">${esc(w.added || "")}</span>
         <button type="button" class="rm-del" data-del="${w.id}" aria-label="delete ${esc(w.label)}">×</button>
@@ -1311,12 +1290,12 @@
       <div class="rm-center">
         <div id="rm-natbar"></div>
         <p class="rm-chips rm-tagchips">${natureTags.map((n, i) => `<span class="${n.on ? "on" : ""}"><button type="button" data-i="${i}">${esc(n.t)}</button><button type="button" class="rm-del" data-x="${i}" title="remove">×</button></span>`).join("")}</p>
-        <p class="rm-why">add what you love in the world. click a tag to turn it on or off.</p>
-        <p class="rm-note rm-real">why: image search is filling up with AI-generated pictures and recent stock. everything here is a real photograph by a named person: the best-rated photographs on Wikimedia Commons, each credited. found a real one somewhere else (eBay, an old photo site, a scan)? save it below.</p>
-        <form id="rm-realadd" class="rm-row rm-realadd"><input name="src" placeholder="paste a real photo's image link" size="30" required><input name="title" placeholder="what is it" size="14"><button type="submit">+ save</button></form>
       </div>
-      ${saved.length ? `<h4>saved (${saved.length})</h4><div class="rm-grid" id="rm-natsaved">${saved.map(tileHTML).join("")}</div><h4 class="rm-gap">more from the world</h4>` : ""}
-      <div class="rm-filters"><button type="button" id="rm-shuffle">shuffle</button><span class="rm-status" id="rm-natst">looking…</span></div>
+      <p class="rm-wide">why: image search is filling up with AI-generated pictures and recent stock. everything here is a real photograph by a named person: the best-rated photographs on Wikimedia Commons, each one credited. click a tag to turn it on or off. found a real one somewhere else (eBay, an old photo site, a scan)? paste it below.</p>
+      <div class="rm-savedhead"><h4>saved${saved.length ? ` (${saved.length})` : ""}</h4>
+        <form id="rm-realadd" class="rm-row"><input name="src" placeholder="paste a real photo's image link" size="30" required><input name="title" placeholder="what is it" size="14"><button type="submit">+ save</button></form></div>
+      ${saved.length ? `<div class="rm-grid" id="rm-natsaved">${saved.map(tileHTML).join("")}</div>` : `<p class="rm-why">nothing saved yet: press + on any photograph.</p>`}
+      <h4 class="rm-gap">more from the world <button type="button" class="rm-why" id="rm-shuffle">shuffle</button> <span class="rm-status" id="rm-natst">looking…</span></h4>
       <div class="rm-grid big" id="rm-natgrid"><div class="rm-loading">${"<i></i>".repeat(12)}</div></div>`;
 
     typingBar($("rm-natbar"), { placeholder: "add a nature tag (rocks, moss, glaciers…)", suggest: false, onPick: (t) => {
@@ -1385,7 +1364,7 @@
         </div>
       </div>
       <div class="rm-picked">
-        <h4>picked <a href="#colors" class="rm-why">all colors + the color machine →</a></h4>
+        <h4>picked <a href="#bank" class="rm-why">the color bank →</a></h4>
         <div class="rm-swatches" id="rm-recent"></div>
       </div>
       <div class="rm-loupe" id="rm-loupe" hidden></div>`;
@@ -1549,7 +1528,8 @@
   }
 
   function showColors() {
-    const v = $("rm-view");
+    const v = $("rm-cpopbody");
+    if (!v) return;
     const sorted = colors.slice();
     if (colorSort === "hue") sorted.sort((a, b) => { const A = hexToHsl(a.hex), B = hexToHsl(b.hex); return (A.s < 0.1) - (B.s < 0.1) || A.h - B.h || A.l - B.l; });
     else if (colorSort === "light") sorted.sort((a, b) => hexToHsl(b.hex).l - hexToHsl(a.hex).l);
@@ -1557,7 +1537,7 @@
     else sorted.reverse();
 
     v.innerHTML = `
-      <p class="rm-intro">${colors.length ? `${colors.length} colors picked.` : `no colors yet: pick some in <a href="#split">2 · split screen</a>.`} click a color to put it on the table. the hex code copies from the table.</p>
+      <p class="rm-intro">${colors.length ? `${colors.length} colors picked.` : `no colors yet: pick some in the color picker.`} click colors to put them on the table, then put them in order: the machine arranges them, or save the combination.</p>
       <div class="rm-filters">
         <span>sort <select id="rm-csort">
           <option value="picked">newest picked</option><option value="hue">by hue</option><option value="light">light to dark</option><option value="source">art / mine / nature</option></select></span>
@@ -1641,7 +1621,7 @@
     });
     v.querySelectorAll("[data-load]").forEach((b) => b.addEventListener("click", () => {
       const c = combos.find((x) => x.id === b.dataset.load);
-      layout = { ...c.layout }; rollSeed = c.seed || 0.5; store.set("layout", layout); setTable(c.hexes.slice()); window.scrollTo(0, 0);
+      layout = { ...c.layout }; rollSeed = c.seed || 0.5; store.set("layout", layout); setTable(c.hexes.slice()); $("rm-cpop").scrollTo(0, 0);
     }));
     v.querySelectorAll("[data-cdel]").forEach((b) => b.addEventListener("click", () => {
       if (!confirmTwice(b)) return;
@@ -1753,7 +1733,7 @@
       <div class="rm-grid" id="rm-cgrid">${list.map(tileHTML).join("")}</div>
       <div class="rm-backup">
         <button type="button" id="rm-export">backup</button> · <label class="rm-file">restore<input type="file" id="rm-import" accept=".json" hidden></label>
-        <span class="rm-why">everything in the room is saved in this browser. backup downloads all of it (words, artists, images, colors, ideas, lists, what you made).</span>
+        <span class="rm-why">everything here is saved in this browser. backup downloads all of it (words, artists, images, colors, ideas, lists, goals, notes, posts).</span>
       </div>
       <div class="rm-compare" id="rm-compare" hidden></div>`;
     $("rm-forder").value = order;
@@ -1797,7 +1777,7 @@
   }
 
   function exportAll() {
-    const data = { room: 4, exported: new Date().toISOString(), mine, dismissed, lineAdds, collection, ideas, commissions, palace, legend, natureTags, colors, combos, lists, share };
+    const data = { room: 4, exported: new Date().toISOString(), mine, dismissed, lineAdds, collection, ideas, commissions, palace, legend, natureTags, colors, combos, lists, share, goals, notes };
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
     a.download = `mind-palace-backup-${today()}.json`;
@@ -1822,6 +1802,8 @@
       colors = merge(colors, d.colors, "id");
       combos = merge(combos, d.combos, "id");
       lists = merge(lists, d.lists, "id");
+      goals = merge(goals, d.goals, "id");
+      notes = merge(notes, d.notes, "id");
       if (d.share) { share.posts = merge(share.posts, d.share.posts, "id"); if (!share.instagram) share.instagram = d.share.instagram || ""; }
       natureTags = natureTags.concat((d.natureTags || []).filter((t) => !natureTags.some((n) => plain(n.t) === plain(t.t))));
       Object.entries(d.lineAdds || {}).forEach(([k, list]) => { lineAdds[k] = [...new Set((lineAdds[k] || []).concat(list))]; });
@@ -1834,54 +1816,6 @@
     p.className = "rm-status"; p.textContent = msg;
     $("rm-view").prepend(p);
     setTimeout(() => p.remove(), 3000);
-  }
-
-  /* ============================================================
-     IDEAS
-     ============================================================ */
-
-  const IDEA_STATES = ["seed", "sketching", "making", "done"];
-
-  function showIdeas() {
-    const v = $("rm-view");
-    v.innerHTML = `
-      <p class="rm-intro">one card per idea: a drawing, a website, anything. pin reference works from any picture's panel, connect a list from <a href="#order">order of operations</a> and colors from the <a href="#colors">color machine</a>.</p>
-      <button type="button" class="rm-btn" id="rm-newidea">+ new idea</button>
-      <div class="rm-ideas">${ideas.slice().reverse().map((i) => `
-        <div class="rm-idea" data-id="${i.id}">
-          <input class="rm-ititle" value="${esc(i.title)}" placeholder="working title">
-          <div class="rm-states">${IDEA_STATES.map((s) => `<button type="button" data-s="${s}" class="${i.status === s ? "on" : ""}">${s}</button>`).join("")}</div>
-          <textarea class="rm-inotes" rows="5" placeholder="size, materials, colors, the feeling, what it's in conversation with…">${esc(i.notes)}</textarea>
-          <div class="rm-ilinks">
-            <select class="rm-ilist" aria-label="order of operations list"><option value="">connect a list…</option>${lists.map((l) => `<option value="${l.id}"${i.list === l.id ? " selected" : ""}>${esc(l.name || "untitled list")}</option>`).join("")}</select>
-            <select class="rm-icombo" aria-label="color combination"><option value="">connect colors…</option>${combos.map((c) => `<option value="${c.id}"${i.combo === c.id ? " selected" : ""}>${esc(c.name || "untitled colors")}</option>`).join("")}</select>
-          </div>
-          ${ideaLinks(i)}
-          <div class="rm-refs">${i.refs.map((id) => { const w = savedWork(id); return w ? `<button type="button" class="rm-ref" data-ref="${esc(id)}" title="${esc(w.title)}, ${esc(w.artist)}">${w.thumb ? `<img src="${esc(w.thumb)}" alt="" referrerpolicy="no-referrer">` : `<span class="rm-pencil"></span>`}</button>` : ""; }).join("") || `<span class="rm-why">no references pinned yet</span>`}</div>
-          <button type="button" class="rm-del" data-del="${i.id}">delete idea</button>
-        </div>`).join("")}</div>`;
-
-    $("rm-newidea").addEventListener("click", () => {
-      ideas.push({ id: uid(), title: "", notes: "", status: "seed", refs: [] }); saveAll(); showIdeas();
-      const first = v.querySelector(".rm-ititle"); if (first) first.focus();
-    });
-    v.querySelectorAll(".rm-idea").forEach((card) => {
-      const i = ideas.find((x) => x.id === card.dataset.id);
-      card.querySelector(".rm-ititle").addEventListener("input", (e) => { i.title = e.target.value; saveAll(); });
-      card.querySelector(".rm-inotes").addEventListener("input", (e) => { i.notes = e.target.value; saveAll(); });
-      card.querySelector(".rm-ilist").addEventListener("change", (e) => { i.list = e.target.value; saveAll(); showIdeas(); });
-      card.querySelector(".rm-icombo").addEventListener("change", (e) => { i.combo = e.target.value; saveAll(); showIdeas(); });
-      card.querySelectorAll(".rm-states button").forEach((b) => b.addEventListener("click", () => {
-        i.status = b.dataset.s; saveAll();
-        card.querySelectorAll(".rm-states button").forEach((x) => x.classList.toggle("on", x === b));
-      }));
-      card.querySelectorAll(".rm-ref").forEach((b) => b.addEventListener("click", () => openPanel(savedWork(b.dataset.ref))));
-      const del = card.querySelector(".rm-del");
-      del.addEventListener("click", () => {
-        if (!confirmTwice(del)) return;
-        ideas = ideas.filter((x) => x.id !== i.id); saveAll(); showIdeas();
-      });
-    });
   }
 
   /* ============================================================
@@ -2086,14 +2020,12 @@
     const v = $("rm-view");
     const recs = shuffle([...new Set(mine.flatMap((m) => curatedNear(m.name)))].filter((n) => !isMine(n) && !dismissed.some((d) => plain(d) === plain(n)))).slice(0, 4);
     v.innerHTML = `
-      <div class="rm-center"><div id="rm-purebar"></div>
-        <p class="rm-why">real work by the artists you love, straight from the museums, made ${CUT} or earlier. then leave: every artist has a way out to their official site, foundation, wikipedia and galleries.</p></div>
-      <div class="rm-pure" id="rm-purelinks">${mine.map((m) => `<div class="rm-purerow" data-name="${esc(m.name)}"><a href="${artistHref(m.name)}"><b>${esc(m.name)}</b></a> <span class="rm-plinks rm-why">finding links…</span></div>`).join("")}
-        ${recs.length ? `<div class="rm-purerow rec"><span class="rm-why">recommended</span> ${recs.map((n) => `<span class="rm-rec"><a href="${artistHref(n)}">${esc(n)}</a> <button type="button" class="rm-why" data-add="${esc(n)}">+ add</button></span>`).join(" · ")}</div>` : ""}
+      <p class="rm-wide">real work by the artists on your list (and a few you might love), straight from the museums, made ${CUT} or earlier. then leave the site: every artist has a way out to their official site or foundation, wikipedia and galleries. add artists on <a href="#artists">other artists</a>.</p>
+      <div class="rm-pure" id="rm-purelinks">${mine.map((m) => `<div class="rm-purerow" data-name="${esc(m.name)}"><a href="${artistHref(m.name)}">${esc(m.name)}</a> <span class="rm-plinks rm-why"></span></div>`).join("")}
+        ${recs.length ? `<div class="rm-purerow rec"><span class="rm-why">you might love</span> ${recs.map((n) => `<span class="rm-rec"><a href="${artistHref(n)}">${esc(n)}</a> <button type="button" class="rm-why" data-add="${esc(n)}">+</button></span>`).join(" · ")}</div>` : ""}
       </div>
-      <div class="rm-filters"><button type="button" id="rm-pshuffle">shuffle</button><span class="rm-status" id="rm-pst">gathering…</span></div>
-      <div class="rm-grid big" id="rm-pgrid"><div class="rm-loading">${"<i></i>".repeat(12)}</div></div>`;
-    typingBar($("rm-purebar"), { placeholder: "add a favorite artist…", onPick: (n) => { addArtist(n); showPure(); } });
+      <div class="rm-grid four" id="rm-pgrid"><div class="rm-loading">${"<i></i>".repeat(8)}</div></div>
+      <p class="rm-filters"><button type="button" id="rm-pshuffle">shuffle</button></p>`;
     v.querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", () => { addArtist(b.dataset.add); showPure(); }));
     $("rm-pshuffle").addEventListener("click", showPure);
 
@@ -2102,10 +2034,10 @@
       const l = await officialLinks(name);
       const ek = Object.keys(R.ELSEWHERE || {}).find((k) => plain(k) === plain(name));
       const links = [
-        l.site && [l.site, "official site / foundation"],
+        l.site && [l.site, "official site"],
         [l.wiki || "https://en.wikipedia.org/wiki/Special:Search?search=" + encodeURIComponent(name), "wikipedia"],
-        ["https://www.artsy.net/artist/" + plain(name).replace(/[^a-z0-9]+/g, "-"), "galleries (artsy)"],
-        ...(ek ? R.ELSEWHERE[ek].map((x) => [x.href, x.where]) : [])
+        ["https://www.artsy.net/artist/" + plain(name).replace(/[^a-z0-9]+/g, "-"), "galleries"],
+        ...(ek ? R.ELSEWHERE[ek].filter((x, k, all) => all.findIndex((y) => y.where === x.where) === k).slice(0, 3).map((x) => [x.href, x.where]) : [])
       ].filter(Boolean);
       const span = row.querySelector(".rm-plinks");
       if (span) span.innerHTML = links.map(([href, label]) => `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(label)} ↗</a>`).join(" · ");
@@ -2119,7 +2051,6 @@
     while (pools.some((p) => p.length) && mixed.length < 80) pools.forEach((p) => { if (p.length) mixed.push(p.pop()); });
     grid.innerHTML = mixed.length ? mixed.map(tileHTML).join("") : `<p class="rm-empty">nothing came back. add an artist above, or check your connection.</p>`;
     wireTiles(grid, mixed);
-    $("rm-pst").textContent = `${mixed.length} works · ` + names.map((n, i) => `${n} ${lists[i].length}`).join(" · ");
   }
 
   /* ============================================================
@@ -2272,7 +2203,7 @@
       c.getContext("2d").drawImage(cv, 0, 0, c.width, c.height);
       const data = c.toDataURL("image/jpeg", 0.8);
       collection.push({ id: "wr-" + uid(), kind: "wreck", museum: "mind palace", title: "obliterated: " + (src.title || "untitled"), artist: "me", thumb: data, img: data, url: "", tags: ["obliterated"], note: "", saved: today() });
-      saveAll(); st.textContent = "saved to your feed";
+      saveAll(); st.innerHTML = `saved to your <a href="#collection">image feed →</a>`;
     });
     const minis = $("rm-wminis");
     minis.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
@@ -2290,28 +2221,60 @@
   function showBank() {
     const v = $("rm-view");
     const sorted = colors.slice().sort((a, b) => { const A = hexToHsl(a.hex), B = hexToHsl(b.hex); return (A.s < 0.1) - (B.s < 0.1) || A.h - B.h || A.l - B.l; });
-    v.innerHTML = sorted.length
-      ? `<div class="rm-bank" id="rm-bank">${sorted.map((c) => `<button type="button" data-id="${c.id}" style="background:${esc(c.hex)}" title="${esc(c.hex)}"></button>`).join("")}</div>
-         <a class="rm-bankgo" href="#colors">arrange in the color machine →</a>
-         <div class="rm-pop" id="rm-pop" hidden></div>`
-      : `<p class="rm-empty">the bank is empty. pick colors in <a href="#picker">2 · color picker</a> or <a href="#split">split screen</a>.</p>`;
-    const pop = $("rm-pop");
-    v.querySelectorAll("#rm-bank button").forEach((b) => b.addEventListener("click", () => {
-      const c = colors.find((x) => x.id === b.dataset.id);
-      const onTable = table.includes(c.hex);
-      pop.innerHTML = `<button class="rm-x" type="button" aria-label="close">×</button>
-        <div class="rm-popsw" style="background:${esc(c.hex)}"></div>
-        <p><b>${esc(c.hex)}</b>${c.from && c.from.title ? `<br><span class="rm-why">from ${esc(c.from.title)}${c.from.artist ? ", " + esc(c.from.artist) : ""}</span>` : ""}</p>
-        ${c.from && c.from.thumb ? `<img src="${esc(c.from.thumb)}" alt="" referrerpolicy="no-referrer">` : ""}
-        <div class="rm-mbtns"><button type="button" data-a="copy">copy hex</button><button type="button" data-a="table">${onTable ? "on the table ✓" : "put on the table"}</button><a href="#colors">open the machine →</a><button type="button" class="rm-del" data-a="del">delete</button></div>`;
-      pop.hidden = false;
-      pop.querySelector(".rm-x").addEventListener("click", () => { pop.hidden = true; });
-      pop.querySelector('[data-a="copy"]').addEventListener("click", (e) => { if (navigator.clipboard) navigator.clipboard.writeText(c.hex); e.target.textContent = "copied"; });
-      pop.querySelector('[data-a="table"]').addEventListener("click", (e) => { if (!table.includes(c.hex)) { table.push(c.hex); store.set("table", table); } e.target.textContent = "on the table ✓"; });
-      const del = pop.querySelector('[data-a="del"]');
-      del.addEventListener("click", () => { if (!confirmTwice(del)) return; colors = colors.filter((x) => x.id !== c.id); saveAll(); showBank(); });
-    }));
+    v.innerHTML = `
+      <div class="rm-banktop"><span class="rm-why">${colors.length} colors</span><button type="button" id="rm-move">move the colors around →</button></div>
+      ${sorted.length
+        ? `<div class="rm-bank" id="rm-bank">${sorted.map((c) => `<button type="button" data-id="${c.id}" data-hex="${esc(c.hex)}" style="background:${esc(c.hex)}" aria-label="${esc(c.hex)}"></button>`).join("")}</div>`
+        : `<p class="rm-empty">the bank is empty. pick colors in the <a href="#picker">color picker</a> or <a href="#split">splitscreen</a>.</p>`}
+      <div class="rm-hexchip" id="rm-hexchip" hidden></div>
+      <div class="rm-pop" id="rm-pop" hidden></div>`;
+    $("rm-move").addEventListener("click", openMachine);
+    const chip = $("rm-hexchip"), pop = $("rm-pop");
+    v.querySelectorAll("#rm-bank button").forEach((b) => {
+      b.addEventListener("mouseenter", () => { const r = b.getBoundingClientRect(); chip.textContent = b.dataset.hex; chip.style.left = r.left + r.width / 2 + "px"; chip.style.top = r.top - 4 + "px"; chip.hidden = false; });
+      b.addEventListener("mouseleave", () => { chip.hidden = true; });
+      b.addEventListener("click", () => {
+        const c = colors.find((x) => x.id === b.dataset.id);
+        const onTable = table.includes(c.hex);
+        pop.innerHTML = `<button class="rm-x" type="button" aria-label="close">×</button>
+          <div class="rm-popsw" style="background:${esc(c.hex)}"></div>
+          <p><b>${esc(c.hex)}</b>${c.from && c.from.title ? `<br><span class="rm-why">from ${esc(c.from.title)}${c.from.artist ? ", " + esc(c.from.artist) : ""}</span>` : ""}</p>
+          ${c.from && c.from.thumb ? `<img src="${esc(c.from.thumb)}" alt="" referrerpolicy="no-referrer">` : ""}
+          <div class="rm-mbtns"><button type="button" data-a="copy">copy hex</button><button type="button" data-a="table">${onTable ? "on the table ✓" : "put on the table"}</button><button type="button" data-a="move">move the colors around →</button><button type="button" class="rm-del" data-a="del">delete</button></div>`;
+        pop.hidden = false;
+        pop.querySelector(".rm-x").addEventListener("click", () => { pop.hidden = true; });
+        pop.querySelector('[data-a="copy"]').addEventListener("click", (e) => { if (navigator.clipboard) navigator.clipboard.writeText(c.hex); e.target.textContent = "copied"; });
+        pop.querySelector('[data-a="table"]').addEventListener("click", (e) => { if (!table.includes(c.hex)) { table.push(c.hex); store.set("table", table); } e.target.textContent = "on the table ✓"; });
+        pop.querySelector('[data-a="move"]').addEventListener("click", () => { pop.hidden = true; openMachine(); });
+        const del = pop.querySelector('[data-a="del"]');
+        del.addEventListener("click", () => { if (!confirmTwice(del)) return; colors = colors.filter((x) => x.id !== c.id); saveAll(); showBank(); });
+      });
+    });
   }
+
+  // the color machine, in a pop-up over the page (like a picture opening big)
+  function openMachine() {
+    let pop = $("rm-cpop");
+    if (!pop) {
+      pop = document.createElement("div");
+      pop.id = "rm-cpop"; pop.className = "rm-cpop";
+      pop.innerHTML = `<button type="button" class="rm-cpopx">close</button><div class="room rm-cpopbody" id="rm-cpopbody"></div>`;
+      document.body.appendChild(pop);
+      pop.querySelector(".rm-cpopx").addEventListener("click", closeMachine);
+      pop.addEventListener("click", (e) => { if (e.target === pop) closeMachine(); });
+    }
+    pop.classList.add("show");
+    document.body.classList.add("rm-noscroll");
+    showColors();
+  }
+  function closeMachine() {
+    const pop = $("rm-cpop");
+    if (!pop || !pop.classList.contains("show")) return;
+    pop.classList.remove("show");
+    document.body.classList.remove("rm-noscroll");
+    if (root.dataset.page === "bank") showBank();
+  }
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMachine(); });
 
   /* ============================================================
      3 · ORDER OF OPERATIONS: lists. Everything that has to
@@ -2327,7 +2290,7 @@
         const done = l.items.filter((x) => x.done).length;
         return `<div class="rm-list" data-id="${l.id}">
           <input class="rm-ltitle" value="${esc(l.name)}" placeholder="name this list">
-          <span class="rm-why">${l.items.length ? `${done} of ${l.items.length} done` : "empty"}</span>
+          <span class="rm-why">${l.items.length ? `${done} of ${l.items.length} done` : "empty"}${ideas.filter((i) => i.list === l.id).map((i) => ` · waters <a href="#ideas">${esc(i.title || "an idea")}</a>`).join("")}</span>
           <ol>${l.items.map((it, k) => `<li class="${it.done ? "done" : ""}"><input type="checkbox" data-k="${k}"${it.done ? " checked" : ""}><input class="rm-ltext" data-k="${k}" value="${esc(it.t)}"><span class="rm-lbtns"><button type="button" data-up="${k}" title="move up">↑</button><button type="button" data-dn="${k}" title="move down">↓</button><button type="button" class="rm-del" data-x="${k}">×</button></span></li>`).join("")}</ol>
           <input class="rm-lnew" placeholder="+ add, press enter">
           <button type="button" class="rm-del rm-ldel">delete list</button>
@@ -2337,7 +2300,11 @@
     v.querySelectorAll(".rm-list").forEach((card) => {
       const l = lists.find((x) => x.id === card.dataset.id);
       card.querySelector(".rm-ltitle").addEventListener("input", (e) => { l.name = e.target.value; saveAll(); });
-      card.querySelectorAll('input[type="checkbox"]').forEach((b) => b.addEventListener("change", () => { l.items[+b.dataset.k].done = b.checked; saveAll(); showOrder(); }));
+      card.querySelectorAll('input[type="checkbox"]').forEach((b) => b.addEventListener("change", () => {
+        l.items[+b.dataset.k].done = b.checked;
+        if (b.checked) ideas.forEach((i) => { if (i.list === l.id) i.watered = Date.now(); });
+        saveAll(); showOrder();
+      }));
       card.querySelectorAll(".rm-ltext").forEach((b) => b.addEventListener("input", () => { l.items[+b.dataset.k].t = b.value; saveAll(); }));
       const swap = (a, b) => { if (b < 0 || b >= l.items.length) return; [l.items[a], l.items[b]] = [l.items[b], l.items[a]]; saveAll(); showOrder(); };
       card.querySelectorAll("[data-up]").forEach((b) => b.addEventListener("click", () => swap(+b.dataset.up, +b.dataset.up - 1)));
@@ -2371,6 +2338,7 @@
     const v = $("rm-view");
     const posts = share.posts.slice().reverse();
     v.innerHTML = `
+      <div class="rm-mywork" id="rm-mywork"></div>
       <div class="rm-share">
         <div class="rm-sleft">
           <h4>this room</h4>
@@ -2382,7 +2350,8 @@
           <p class="rm-why">what life is feeding the art: now listening, now watching, now reading, now loving…</p>
           <div id="rm-now">${share.now.map((n, k) => `<div class="rm-nowrow" data-k="${k}"><input data-f="label" value="${esc(n.label)}" size="12"><input data-f="title" value="${esc(n.title)}" placeholder="what" size="16"><input data-f="by" value="${esc(n.by || "")}" placeholder="by" size="12"><button type="button" class="rm-del" data-x="${k}">×</button></div>`).join("")}</div>
           <button type="button" class="rm-why" id="rm-nowadd">+ another</button>
-          <p class="rm-note">for now this all lives in your browser. once the room saves online, this page becomes the part other people see.</p>
+          <p class="rm-note">for now this all lives in your browser. once it saves online, this page becomes the part other people see. (your goals, plants and notes stay private.)</p>
+          ${share.artist ? `<p><a href="${esc(typeof PORTFOLIO === "string" ? PORTFOLIO : "#")}" target="_blank" rel="noopener">my portfolio ↗</a></p>` : ""}
         </div>
         <div class="rm-sright">
           <h4>what did you make?</h4>
@@ -2394,8 +2363,9 @@
           <div class="rm-posts">${posts.map((p) => `<article class="rm-post" data-id="${p.id}">${p.img ? `<img src="${esc(p.img)}" alt="" referrerpolicy="no-referrer">` : ""}<div><span class="rm-why">${esc(p.date)}</span><br><b>${esc(p.title)}</b>${p.text ? `<p>${esc(p.text).replace(/\n/g, "<br>")}</p>` : ""}<button type="button" class="rm-del">delete</button></div></article>`).join("") || `<p class="rm-empty">nothing posted yet.</p>`}</div>
         </div>
       </div>`;
+    drawMyWork($("rm-mywork"));
     $("rm-rname").addEventListener("input", (e) => { share.roomName = e.target.value; saveAll(); });
-    v.querySelectorAll("#rm-artist button").forEach((b) => b.addEventListener("click", () => { share.artist = b.dataset.a === "1"; saveAll(); drawMyWork(); showShare(); }));
+    v.querySelectorAll("#rm-artist button").forEach((b) => b.addEventListener("click", () => { share.artist = b.dataset.a === "1"; saveAll(); showShare(); }));
     if ($("rm-ig")) $("rm-ig").addEventListener("change", (e) => { share.instagram = e.target.value.trim(); saveAll(); showShare(); });
     v.querySelectorAll(".rm-nowrow").forEach((row) => {
       const n = share.now[+row.dataset.k];
@@ -2421,5 +2391,246 @@
   }
 
 
+  /* ============================================================
+     THE GARDEN: every idea is a plant.
+     A new idea is a seed. Connect it to a list on order of
+     operations and every step you check off waters it and it
+     grows: sprout, seedling, bud, flower, a big flower ready to
+     harvest. Forget about it and it gets thirsty, then shrinks.
+     ============================================================ */
+
+  const PLANT_ART = [
+    ["         ", "         ", "         ", "    .    ", "~~~~~~~~~"],                                  // 0 seed
+    ["         ", "         ", "    ,    ", "    |    ", "~~~~|~~~~"],                                  // 1 sprout
+    ["         ", "   \\ /   ", "    |    ", "   \\|    ", "~~~~|~~~~"],                                 // 2 seedling
+    ["    o    ", "   \\|/   ", "    |    ", "   \\|/   ", "~~~~|~~~~"],                                 // 3 bud
+    ["   .-.   ", "  ( @ )  ", "   '|'   ", "   \\|/   ", "~~~~|~~~~"],                                 // 4 flower
+    [" .-'-'-. ", "(  (@)  )", " '-.|.-' ", "  \\\\|//  ", "~~~~|~~~~"],                               // 5 ready to harvest
+    ["  @ @ @  ", "   \\|/   ", "   _|_   ", "  |   |  ", "  |___|  "]                                  // 6 harvested
+  ];
+  const PLANT_NAMES = ["seed", "sprout", "seedling", "bud", "flower", "ready to harvest", "harvested"];
+
+  function plantOf(i) {
+    const l = i.list && lists.find((x) => x.id === i.list);
+    const total = l ? l.items.length : 0, done = l ? l.items.filter((x) => x.done).length : 0;
+    const p = total ? done / total : 0;
+    if (i.harvested) return { stage: 6, grown: 6, p: 1, done, total, days: 0, thirsty: false, wilting: false };
+    const grown = !l ? 0 : p >= 1 ? 5 : p >= 0.75 ? 4 : p >= 0.5 ? 3 : p >= 0.2 ? 2 : 1;
+    const last = i.watered || (i.planted ? new Date(i.planted + "T12:00").getTime() : Date.now());
+    const days = Math.floor((Date.now() - last) / 864e5);
+    // a plant you haven't worked on gets thirsty after 4 days, then shrinks a stage every week
+    const shrink = grown === 5 || grown < 2 ? 0 : Math.max(0, Math.floor((days - 4) / 7) + (days >= 11 ? 1 : 0));
+    const stage = Math.max(1, grown - shrink);
+    return { stage: grown === 0 ? 0 : stage, grown, p, done, total, days, thirsty: grown > 0 && grown < 5 && days >= 4, wilting: stage < grown };
+  }
+
+  function plantHTML(i, size = "") {
+    const pl = plantOf(i);
+    return `<pre class="rm-plant s${pl.stage}${pl.thirsty ? " thirsty" : ""} ${size}" aria-label="${PLANT_NAMES[pl.stage]}">${PLANT_ART[pl.stage].map(esc).join("\n")}</pre>`;
+  }
+
+  function plantLine(i) {
+    const pl = plantOf(i);
+    if (pl.stage === 6) return `harvested ${esc(i.harvested)}`;
+    if (!i.list) return `a seed. connect a list from <a href="#order">order of operations</a> and every step you check off waters it.`;
+    const bar = "[" + "#".repeat(Math.round(pl.p * 10)) + "-".repeat(10 - Math.round(pl.p * 10)) + "]";
+    return `${PLANT_NAMES[pl.stage]} <span class="rm-bar">${bar}</span> ${pl.done} of ${pl.total}`
+      + (pl.thirsty ? ` · <span class="rm-late">thirsty: ${pl.days} days since you worked on it${pl.wilting ? ", it's shrinking" : ""}</span>` : "");
+  }
+
+  // all the plants, along the bottom of every page
+  function drawGarden() {
+    let g = $("rm-garden");
+    const live = ideas.filter((i) => !i.harvested || i.harvested >= new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10));
+    if (!live.length) { if (g) g.remove(); return; }
+    if (!g) { g = document.createElement("a"); g.id = "rm-garden"; g.className = "rm-garden"; g.href = "#progress"; g.title = "your garden"; document.body.appendChild(g); }
+    g.innerHTML = live.map((i) => `<span class="rm-gplant" title="${esc(i.title || "untitled idea")} · ${PLANT_NAMES[plantOf(i).stage]}">${plantHTML(i, "tiny")}</span>`).join("");
+  }
+
+  /* ============================================================
+     IDEAS (the idea board)
+     ============================================================ */
+
+  const IDEA_STATES = ["seed", "sketching", "making", "done"];
+
+  function showIdeas() {
+    const v = $("rm-view");
+    v.innerHTML = `
+      <p class="rm-intro">one card per idea: a drawing, a website, anything. every idea starts as a seed. connect it to a list from <a href="#order">order of operations</a>: each step you check off waters it until it flowers. pin reference pictures from any picture's panel, and colors from the color bank.</p>
+      <button type="button" class="rm-btn" id="rm-newidea">+ plant a new idea</button>
+      <div class="rm-ideas">${ideas.slice().reverse().map((i) => {
+        const pl = plantOf(i);
+        return `
+        <div class="rm-idea${pl.stage === 6 ? " harvested" : ""}" data-id="${i.id}">
+          <div class="rm-ihead">${plantHTML(i)}<div>
+            <input class="rm-ititle" value="${esc(i.title)}" placeholder="working title">
+            <p class="rm-why rm-iline">${plantLine(i)}</p>
+            ${pl.stage === 5 ? `<button type="button" class="rm-btn" data-harvest="1">harvest it</button>` : ""}
+          </div></div>
+          <div class="rm-states">${IDEA_STATES.map((s) => `<button type="button" data-s="${s}" class="${i.status === s ? "on" : ""}">${s}</button>`).join("")}</div>
+          <textarea class="rm-inotes" rows="4" placeholder="size, materials, colors, the feeling, what it's in conversation with…">${esc(i.notes)}</textarea>
+          <div class="rm-ilinks">
+            <select class="rm-ilist" aria-label="order of operations list"><option value="">connect a list…</option>${lists.map((l) => `<option value="${l.id}"${i.list === l.id ? " selected" : ""}>${esc(l.name || "untitled list")}</option>`).join("")}<option value="new">+ a new list for this idea</option></select>
+            <select class="rm-icombo" aria-label="color combination"><option value="">connect colors…</option>${combos.map((c) => `<option value="${c.id}"${i.combo === c.id ? " selected" : ""}>${esc(c.name || "untitled colors")}</option>`).join("")}</select>
+          </div>
+          ${ideaLinks(i)}
+          <div class="rm-refs">${i.refs.map((id) => { const w = savedWork(id); return w ? `<button type="button" class="rm-ref" data-ref="${esc(id)}" title="${esc(w.title)}, ${esc(w.artist)}">${w.thumb ? `<img src="${esc(w.thumb)}" alt="" referrerpolicy="no-referrer">` : `<span class="rm-pencil"></span>`}</button>` : ""; }).join("") || `<span class="rm-why">no references pinned yet</span>`}</div>
+          <button type="button" class="rm-del" data-del="${i.id}">delete idea</button>
+        </div>`; }).join("")}</div>`;
+
+    $("rm-newidea").addEventListener("click", () => {
+      ideas.push({ id: uid(), title: "", notes: "", status: "seed", refs: [], planted: today(), watered: Date.now() }); saveAll(); showIdeas();
+      const first = v.querySelector(".rm-ititle"); if (first) first.focus();
+    });
+    v.querySelectorAll(".rm-idea").forEach((card) => {
+      const i = ideas.find((x) => x.id === card.dataset.id);
+      card.querySelector(".rm-ititle").addEventListener("input", (e) => { i.title = e.target.value; saveAll(); });
+      card.querySelector(".rm-inotes").addEventListener("input", (e) => { i.notes = e.target.value; saveAll(); });
+      card.querySelector(".rm-ilist").addEventListener("change", (e) => {
+        if (e.target.value === "new") {
+          const l = { id: uid(), name: i.title || "new idea", items: [] };
+          lists.unshift(l); i.list = l.id; i.watered = Date.now(); saveAll(); location.hash = "#order"; return;
+        }
+        i.list = e.target.value; i.watered = Date.now(); saveAll(); showIdeas();
+      });
+      card.querySelector(".rm-icombo").addEventListener("change", (e) => { i.combo = e.target.value; saveAll(); showIdeas(); });
+      card.querySelectorAll(".rm-states button").forEach((b) => b.addEventListener("click", () => {
+        i.status = b.dataset.s; saveAll();
+        card.querySelectorAll(".rm-states button").forEach((x) => x.classList.toggle("on", x === b));
+      }));
+      const hv = card.querySelector("[data-harvest]");
+      if (hv) hv.addEventListener("click", () => { i.harvested = today(); i.status = "done"; saveAll(); showIdeas(); });
+      card.querySelectorAll(".rm-ref").forEach((b) => b.addEventListener("click", () => openPanel(savedWork(b.dataset.ref))));
+      const del = card.querySelector(".rm-del");
+      del.addEventListener("click", () => {
+        if (!confirmTwice(del)) return;
+        ideas = ideas.filter((x) => x.id !== i.id); saveAll(); showIdeas();
+      });
+    });
+  }
+
+  /* ============================================================
+     3 · PROGRESS TRACKER: the whole garden, and goals you set
+     for yourself (draw every day, the november challenge…).
+     Private: none of this goes on your profile.
+     ============================================================ */
+
+  const dayKey = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  const fromKey = (k) => new Date(k + "T12:00");
+
+  function goalDays(g) {
+    const end = g.end ? fromKey(g.end) : new Date();
+    let start = fromKey(g.start);
+    if (!g.end) { const s = new Date(); s.setDate(s.getDate() - 34); if (s > start) start = s; }   // open goals show the last 5 weeks
+    const out = [];
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) out.push(dayKey(d));
+    return out;
+  }
+  function streakOf(g) {
+    let n = 0; const d = new Date();
+    if (!g.days[dayKey(d)]) d.setDate(d.getDate() - 1);      // today not done yet doesn't break it
+    while (g.days[dayKey(d)]) { n++; d.setDate(d.getDate() - 1); }
+    return n;
+  }
+
+  function showProgress() {
+    const v = $("rm-view");
+    const t = dayKey(new Date()), y = new Date().getFullYear();
+    const growing = ideas.filter((i) => !i.harvested), picked = ideas.filter((i) => i.harvested);
+    v.innerHTML = `
+      <p class="rm-intro">just for you: your garden of ideas, and the goals you've set. nothing here goes on your profile.</p>
+      <h4>the garden</h4>
+      ${growing.length ? `<div class="rm-garden-big">${growing.map((i) => `<a href="#ideas" class="rm-gcell">${plantHTML(i)}<b>${esc(i.title || "untitled idea")}</b><span class="rm-why">${plantLine(i).replace(/<a [^>]*>|<\/a>/g, "")}</span></a>`).join("")}</div>`
+        : `<p class="rm-why">nothing growing yet: <a href="#ideas">plant an idea</a>.</p>`}
+      ${picked.length ? `<h4 class="rm-gap">harvested</h4><div class="rm-garden-big small">${picked.map((i) => `<a href="#ideas" class="rm-gcell">${plantHTML(i)}<b>${esc(i.title || "untitled")}</b><span class="rm-why">${esc(i.harvested)}</span></a>`).join("")}</div>` : ""}
+
+      <h4 class="rm-gap">goals</h4>
+      <div class="rm-mbtns">
+        <button type="button" data-preset="daily">+ draw every day</button>
+        <button type="button" data-preset="nov">+ november drawing challenge</button>
+        <form id="rm-goaladd" class="rm-row"><input name="name" placeholder="your own goal" size="18" required><input name="start" type="date" value="${t}"><span class="rm-why">to</span><input name="end" type="date"><button type="submit">+ add</button></form>
+      </div>
+      <div class="rm-goals">${goals.map((g) => {
+        const days = goalDays(g), done = Object.keys(g.days).filter((k) => g.days[k]).length;
+        const pad = (fromKey(days[0]).getDay() + 6) % 7;      // weeks start on monday
+        return `<div class="rm-goal" data-id="${g.id}">
+          <div class="rm-goalhead"><b>${esc(g.name)}</b><span class="rm-why">${g.end ? `${esc(g.start)} → ${esc(g.end)} · ` : "every day · "}${done} day${done === 1 ? "" : "s"} · streak ${streakOf(g)}</span></div>
+          <div class="rm-days">${"<i class='pad'></i>".repeat(pad)}${days.map((k) => `<button type="button" data-day="${k}" class="${g.days[k] ? "on" : ""}${k === t ? " today" : ""}${k > t ? " later" : ""}" title="${k}"${k > t ? " disabled" : ""}>${+k.slice(8)}</button>`).join("")}</div>
+          <button type="button" class="rm-del">delete goal</button>
+        </div>`;
+      }).join("") || `<p class="rm-why">no goals yet. click a day to mark it done.</p>`}</div>`;
+
+    const add = (name, start, end) => { goals.unshift({ id: uid(), name, start, end, days: {} }); saveAll(); showProgress(); };
+    v.querySelector('[data-preset="daily"]').addEventListener("click", () => add("draw every day", t, ""));
+    v.querySelector('[data-preset="nov"]').addEventListener("click", () => add(`november drawing challenge ${y}`, `${y}-11-01`, `${y}-11-30`));
+    $("rm-goaladd").addEventListener("submit", (e) => { e.preventDefault(); const f = e.target; add(f.name.value.trim(), f.start.value || t, f.end.value); });
+    v.querySelectorAll(".rm-goal").forEach((card) => {
+      const g = goals.find((x) => x.id === card.dataset.id);
+      card.querySelectorAll("[data-day]").forEach((b) => b.addEventListener("click", () => { g.days[b.dataset.day] = !g.days[b.dataset.day]; saveAll(); showProgress(); }));
+      const del = card.querySelector(".rm-del");
+      del.addEventListener("click", () => { if (!confirmTwice(del)) return; goals = goals.filter((x) => x.id !== g.id); saveAll(); showProgress(); });
+    });
+  }
+
+  /* ============================================================
+     4 · NOTES: a free pad on graph paper. Type, or switch to
+     draw and draw right on top. Saved in this browser.
+     ============================================================ */
+
+  let noteAt = 0, noteMode = "type", notePen = "pencil";
+  const PENS = { pencil: ["#777", 2], ink: ["#111", 2.5], marker: ["#bbb", 10], eraser: [null, 22] };
+
+  function showNotes() {
+    const v = $("rm-view");
+    if (noteAt >= notes.length) noteAt = 0;
+    const n = notes[noteAt];
+    v.innerHTML = `
+      <div class="rm-notetabs">${notes.map((x, k) => `<button type="button" data-k="${k}" class="${k === noteAt ? "on" : ""}">${esc(x.title || "untitled")}</button>`).join("")}<button type="button" id="rm-newnote">+ page</button></div>
+      <div class="rm-mbtns rm-notetools">
+        <input id="rm-ntitle" value="${esc(n.title)}" placeholder="page name" size="18">
+        <button type="button" data-mode="type" class="${noteMode === "type" ? "on" : ""}">type</button>
+        <button type="button" data-mode="draw" class="${noteMode === "draw" ? "on" : ""}">draw</button>
+        <span class="rm-pens"${noteMode === "draw" ? "" : " hidden"}>${Object.keys(PENS).map((k) => `<button type="button" data-pen="${k}" class="${notePen === k ? "on" : ""}">${k}</button>`).join("")}<button type="button" id="rm-nclear" class="rm-del">clear drawing</button></span>
+        <button type="button" class="rm-del" id="rm-ndel">delete page</button>
+      </div>
+      <div class="rm-sheet ${noteMode}">
+        <textarea id="rm-ntext" placeholder="anything…">${esc(n.text)}</textarea>
+        <canvas id="rm-ncv" width="1600" height="1000"></canvas>
+      </div>`;
+    const cv = $("rm-ncv"), ctx = cv.getContext("2d");
+    if (n.draw) { const im = new Image(); im.onload = () => ctx.drawImage(im, 0, 0); im.src = n.draw; }
+    v.querySelectorAll(".rm-notetabs [data-k]").forEach((b) => b.addEventListener("click", () => { noteAt = +b.dataset.k; showNotes(); }));
+    $("rm-newnote").addEventListener("click", () => { notes.push({ id: uid(), title: "", text: "", draw: "" }); noteAt = notes.length - 1; saveAll(); showNotes(); $("rm-ntitle").focus(); });
+    $("rm-ntitle").addEventListener("input", (e) => { n.title = e.target.value; saveAll(); });
+    $("rm-ntext").addEventListener("input", (e) => { n.text = e.target.value; saveAll(); });
+    v.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => { noteMode = b.dataset.mode; showNotes(); }));
+    v.querySelectorAll("[data-pen]").forEach((b) => b.addEventListener("click", () => { notePen = b.dataset.pen; v.querySelectorAll("[data-pen]").forEach((x) => x.classList.toggle("on", x === b)); }));
+    $("rm-nclear").addEventListener("click", (e) => { if (!confirmTwice(e.currentTarget, "click again to clear")) return; ctx.clearRect(0, 0, cv.width, cv.height); n.draw = ""; saveAll(); });
+    const del = $("rm-ndel");
+    del.addEventListener("click", () => {
+      if (!confirmTwice(del)) return;
+      notes.splice(noteAt, 1); if (!notes.length) notes.push({ id: uid(), title: "notes", text: "", draw: "" });
+      noteAt = 0; saveAll(); showNotes();
+    });
+
+    let down = false, lx = 0, ly = 0;
+    const at = (e) => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height]; };
+    cv.addEventListener("pointerdown", (e) => { if (noteMode !== "draw") return; down = true; cv.setPointerCapture(e.pointerId); [lx, ly] = at(e); line(lx + 0.1, ly + 0.1); });
+    cv.addEventListener("pointermove", (e) => { if (!down) return; const [x, y] = at(e); line(x, y); });
+    const stop = () => { if (!down) return; down = false; n.draw = cv.toDataURL("image/png"); saveAll(); };
+    cv.addEventListener("pointerup", stop); cv.addEventListener("pointercancel", stop);
+    function line(x, y) {
+      const [color, w] = PENS[notePen];
+      ctx.save();
+      ctx.globalCompositeOperation = color ? "source-over" : "destination-out";
+      ctx.strokeStyle = color || "#000"; ctx.lineWidth = w * (cv.width / cv.getBoundingClientRect().width); ctx.lineCap = "round"; ctx.lineJoin = "round";
+      ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(x, y); ctx.stroke();
+      ctx.restore();
+      lx = x; ly = y;
+    }
+  }
+
+
+  gardenReady = true;
   route();
 })();

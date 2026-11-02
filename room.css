@@ -572,3 +572,101 @@ h4.rm-gap, .rm-gap { margin-top: 34px; }
   .rm-pop { left: 12px; right: 12px; width: auto; }
 }
 .rm-post .rm-del { display: block; margin-top: 6px; }
+
+/* ============================================================
+   THE PLUS PLATFORM: round two
+   ============================================================ */
+
+/* paragraphs that run all the way across, justified on both sides */
+.rm-wide { text-align: justify; hyphens: auto; -webkit-hyphens: auto; color: var(--muted); margin: 6px 0 16px; max-width: none; }
+
+/* pure art: 4 across */
+.rm-grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 26px; }
+@media (max-width: 760px) { .rm-grid.four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.rm-pure { border-top: 0; margin-bottom: 22px; }
+.rm-purerow { border-bottom: 0; padding: 1px 0; gap: 10px; }
+.rm-purerow > a { min-width: 150px; color: var(--text); }
+.rm-plinks { font-size: 11px; }
+
+/* pure images: saved heading with the paste box beside it */
+.rm-savedhead { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; margin: 4px 0 10px; }
+.rm-savedhead h4 { margin: 0; }
+h4 .rm-why, h4 .rm-status { font-weight: 400; margin-left: 8px; }
+
+/* color bank: small squares, edge to edge, a hair apart */
+.room.on-bank { padding-right: 0; }
+.rm-banktop { display: flex; justify-content: space-between; align-items: center; margin: 0 var(--pad) 10px 0; }
+.rm-banktop button { border: 1px solid var(--line); padding: 3px 10px; }
+.rm-banktop button:hover { border-color: #000; }
+.rm-bank { display: grid; grid-template-columns: repeat(auto-fill, minmax(26px, 1fr)); gap: 3px; min-height: 0; grid-auto-rows: auto; padding-right: 3px; }
+.rm-bank button { width: auto; height: auto; min-height: 0; aspect-ratio: 1 / 1; display: block; }
+.rm-bank button:hover { outline: 1px solid #000; outline-offset: 1px; }
+.rm-hexchip { position: fixed; z-index: 70; transform: translate(-50%, -100%); background: #fff; border: 1px solid var(--line); padding: 1px 6px; font-size: 11px; pointer-events: none; color: var(--text); }
+
+/* the color machine pop-up */
+.rm-cpop { position: fixed; inset: 0; z-index: 90; background: rgba(255, 255, 255, 0.96); display: none; overflow-y: auto; padding: 50px var(--pad) 60px; }
+.rm-cpop.show { display: block; animation: fade-in .2s ease; }
+.rm-cpopbody { padding: 0; max-width: 1100px; margin: 0 auto; }
+.rm-cpopx { position: fixed; top: 18px; right: var(--pad); padding: 6px; z-index: 2; }
+body.rm-noscroll { overflow: hidden; }
+
+/* profile: your work across the top */
+.rm-mywork { margin-bottom: 26px; }
+
+/* plants (ascii) */
+.rm-plant { font-family: "Courier New", ui-monospace, Menlo, monospace; font-size: 12px; line-height: 1.05; margin: 0; color: #888; white-space: pre; letter-spacing: 0; }
+.rm-plant.s4, .rm-plant.s5 { color: #555; }
+.rm-plant.s5 { animation: rm-sway 3s ease-in-out infinite; transform-origin: 50% 100%; }
+.rm-plant.s6 { color: #999; }
+.rm-plant.thirsty { color: #c4b8a8; transform: skewX(-9deg); transform-origin: 50% 100%; }
+@keyframes rm-sway { 0%, 100% { transform: rotate(-1.5deg); } 50% { transform: rotate(1.5deg); } }
+.rm-plant.tiny { font-size: 5.5px; line-height: 1; }
+.rm-ihead { display: flex; gap: 14px; align-items: flex-end; margin-bottom: 8px; }
+.rm-ihead > div { flex: 1; min-width: 0; }
+.rm-iline { font-size: 11px; margin: 4px 0; }
+.rm-bar { font-family: "Courier New", ui-monospace, monospace; letter-spacing: -0.5px; }
+.rm-idea.harvested { opacity: .7; }
+
+/* the garden: your plants along the bottom of every page */
+.rm-garden { position: fixed; right: var(--pad); bottom: 10px; z-index: 40; display: flex; gap: 10px; align-items: flex-end; max-width: calc(100vw - var(--sidebar) - var(--pad) * 2); overflow-x: auto; scrollbar-width: none; padding: 4px 6px 2px; background: rgba(255, 255, 255, .82); }
+.rm-garden:hover { text-decoration: none; background: #fff; }
+.rm-gplant { display: block; }
+
+/* progress tracker */
+.rm-garden-big { display: flex; flex-wrap: wrap; gap: 28px; margin-bottom: 10px; }
+.rm-gcell { display: flex; flex-direction: column; gap: 4px; width: 170px; }
+.rm-gcell:hover { text-decoration: none; }
+.rm-gcell .rm-plant { font-size: 15px; }
+.rm-garden-big.small .rm-gcell .rm-plant { font-size: 10px; }
+.rm-gcell .rm-why { font-size: 10px; }
+.rm-goals { display: flex; flex-wrap: wrap; gap: 30px; margin-top: 16px; }
+.rm-goal { width: 260px; }
+.rm-goalhead { display: flex; flex-direction: column; margin-bottom: 6px; }
+.rm-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.rm-days button, .rm-days .pad { aspect-ratio: 1 / 1; font-size: 9px; color: #bbb; border: 1px solid var(--line); display: flex; align-items: flex-end; justify-content: flex-end; padding: 2px; }
+.rm-days .pad { border: 0; }
+.rm-days button.on { background: #555; border-color: #555; color: #eee; }
+.rm-days button.today { outline: 1px solid #000; outline-offset: 1px; }
+.rm-days button.later { opacity: .35; cursor: default; }
+.rm-goal .rm-del { margin-top: 6px; }
+
+/* notes: a pad on graph paper */
+.rm-notetabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+.rm-notetabs button { border: 1px solid var(--line); padding: 3px 10px; color: var(--muted); }
+.rm-notetabs button.on { border-color: #000; color: #000; }
+.rm-notetools { align-items: center; }
+.rm-pens[hidden] { display: none; }
+.rm-sheet { position: relative; width: 100%; aspect-ratio: 16 / 10; border: 1px solid var(--line); margin-top: 10px;
+  background-color: #fff; background-image: linear-gradient(#efefef 1px, transparent 1px), linear-gradient(90deg, #efefef 1px, transparent 1px); background-size: 28px 28px; }
+.rm-sheet textarea { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; resize: none; padding: 20px 24px; line-height: 28px; font-size: 13px; }
+.room .rm-sheet textarea:focus { border: 0; }
+.rm-sheet canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; touch-action: none; }
+.rm-sheet.draw canvas { pointer-events: auto; cursor: crosshair; }
+.rm-purerow { display: grid; grid-template-columns: 160px 1fr; align-items: baseline; }
+.rm-purerow.rec { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; }
+.rm-rec { white-space: nowrap; display: inline-flex; gap: 4px; align-items: baseline; }
+.rm-cpop .rm-swatches.lib { gap: 3px; }
+.rm-cpop .rm-swatches.lib .rm-swatch span { display: none; }
+.rm-cpop .rm-swatches.lib .rm-swatch i { width: 26px; height: 26px; }
+.rm-cpop .rm-libitem .rm-del { display: none; }
+.rm-plant.tiny { font-size: 7px; }

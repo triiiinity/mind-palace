@@ -931,3 +931,39 @@ html.dark { --neon: #ff7ad9; }
 .series-text p { color: var(--neon); margin: 0 0 10px; text-align: justify; hyphens: auto; -webkit-hyphens: auto; }
 .series-text p:last-child { margin-bottom: 0; }
 @media (max-width: 760px) { .series-text { margin: 24px var(--pad) 60px; } .grid .series-text.grid-tail { grid-column: auto; aspect-ratio: auto; margin: 0; } }
+
+/* ============================================================
+   THE PLUS PLATFORM
+   ============================================================ */
+
+/* the html is white; the body is see-through so the grid can show through it */
+body { background: transparent; }
+
+/* the menu: four steps down the left column */
+#site-header nav.menu { gap: 16px; }
+.menu-step { display: flex; flex-direction: column; gap: 3px; }
+.menu-label { color: var(--muted); }
+.menu-step a { padding-left: 12px; }
+
+/* the grid that shows through where you click (see GRID_SIZE in base.js) */
+.grid-layer {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: var(--grid, 28px) var(--grid, 28px);
+  opacity: 0; transition: opacity 1.2s ease;
+  -webkit-mask-image: radial-gradient(circle at var(--gx, 50%) var(--gy, 50%), #000 var(--gr, 0px), transparent calc(var(--gr, 0px) + 80px));
+          mask-image: radial-gradient(circle at var(--gx, 50%) var(--gy, 50%), #000 var(--gr, 0px), transparent calc(var(--gr, 0px) + 80px));
+}
+.grid-layer.on { opacity: 1; transition: opacity .2s ease; }
+
+/* the cursor: plus signs falling */
+.fallplus {
+  position: fixed; pointer-events: none; z-index: 9999; line-height: 1;
+  transform: translate(-50%, -50%);
+  animation: plus-fall 1.1s ease-in forwards;
+}
+@keyframes plus-fall {
+  0%   { opacity: 1; transform: translate(-50%, -50%); }
+  25%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(45deg); }
+}
