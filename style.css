@@ -1,0 +1,933 @@
+/* ============================================================
+   STUDIO ROOM — STYLE (started as a copy of trinity lester's style.css)
+   White, small type, everything on a grid.
+   Change the variables below to restyle the whole site.
+   ============================================================ */
+
+:root {
+  --bg: #ffffff;
+  --text: #666666;        /* main text: dark gray */
+  --muted: #999999;       /* captions, secondary text */
+  --line: #e2e2e2;
+
+  /* ---- FONT SETTINGS: HELVETICA (the original look) ---- */
+  --font: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --size: 12px;           /* base text size */
+  --name-size: 14px;      /* your name at the top */
+  --name-weight: 700;
+  --strong: 700;         /* weight of titles in captions */
+  --case: none;           /* none = as typed, lowercase = everything lowercase */
+
+  --gap: 34px;            /* space between images on the year/tag pages */
+  --pad: 28px;            /* space around the edge of the page */
+  --sidebar: 200px;       /* width of the left menu column */
+  --name-h: 66px;         /* height of the name bar across the top */
+  --tile-ratio: 4 / 5;    /* shape of each grid tile: try 1 / 1 or 3 / 4 */
+  --box: rgba(255, 255, 255, 0.86);  /* the semi-opaque hover boxes */
+
+  /* HOME SPOTLIGHT SIZE: the fixed frame on the home page.
+     width is a share of the screen width (40vw = 40%).
+     height is the frame's shape, but never taller than the screen. */
+  --spot-w: 40vw;
+  --spot-h: min(50vw, calc(100vh - var(--name-h) - 84px));
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--size);
+  text-transform: var(--case);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; text-decoration: none; }
+a:hover { text-decoration: underline; text-underline-offset: 3px; }
+b { font-weight: var(--strong); }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-transform: inherit; }
+
+/* ---------- PAGE LAYOUT ----------
+   Row 1: your name, across the whole top, on every page.
+   Row 2: menu on the left, page content on the right.   */
+
+body {
+  display: grid;
+  grid-template-columns: var(--sidebar) 1fr;
+  grid-template-rows: var(--name-h) 1fr;
+  min-height: 100vh;
+}
+#site-header { display: contents; }   /* lets the name + menu sit directly in the grid */
+
+.name-bar {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--bg);
+  padding: var(--pad) var(--pad) 0;
+}
+.name-bar a { font-size: var(--name-size); font-weight: var(--name-weight); letter-spacing: -0.01em; }
+
+main { grid-column: 2; grid-row: 2; min-width: 0; }
+
+/* ---------- LEFT COLUMN: VERTICAL MENU (+ tags on gallery pages) ---------- */
+
+#site-header nav {
+  grid-column: 1;
+  grid-row: 2;
+  position: sticky;
+  top: var(--name-h);
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 0 var(--pad) 30px;
+  max-height: calc(100vh - var(--name-h));
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+#site-header nav::-webkit-scrollbar { display: none; }
+#site-header a.current, #site-header .label.current { text-decoration: underline; text-underline-offset: 3px; }
+
+.dropdown .label { cursor: pointer; user-select: none; }
+.dropdown-menu { display: none; flex-direction: column; gap: 3px; padding: 3px 0 3px 14px; }
+.dropdown:hover .dropdown-menu,
+.dropdown.open .dropdown-menu { display: flex; }
+
+/* tags: live in the menu, under the + */
+.tagpanel { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; margin-top: 26px; width: 100%; }
+.tagpanel .tp-label { color: var(--muted); margin-top: 10px; }
+.tagpanel .tp-label:first-child { margin-top: 0; }
+.tagpanel .active { font-weight: var(--strong); color: var(--text); }
+.tagpanel i { font-style: normal; color: var(--muted); margin-left: 5px; }
+
+/* the image that appears when you hover a year */
+#year-preview {
+  position: fixed;
+  left: calc(var(--sidebar) + 6px);
+  width: 190px;
+  background: var(--bg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s;
+  z-index: 20;
+}
+#year-preview.show { opacity: 1; }
+#year-preview img { display: block; width: 100%; max-height: 250px; object-fit: contain; }
+#year-preview .placeholder { aspect-ratio: 4 / 5; }
+#year-preview .pv-label { padding: 4px 0; color: var(--muted); }
+
+/* ---------- HOME: SPOTLIGHT ----------
+   One big fixed frame on the right. The caption is one line at the top,
+   ending at the image's left edge. Preview thumbnails trail along the
+   bottom, to the left of the image. Small arrows sit under its corner. */
+
+#spotlight {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  column-gap: 18px;
+  padding: 0 var(--pad) 60px 0;
+}
+
+.spot-caption {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: start;
+  justify-self: end;
+  max-width: 100%;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+}
+.spot-caption b { color: var(--text); }
+
+.spot-thumbs {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: end;
+  justify-self: end;
+  display: flex;
+  flex-wrap: wrap-reverse;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 100%;
+}
+.thumb {
+  flex: none;
+  width: 54px;
+  height: 54px;
+  opacity: 0.5;
+  outline: 1px solid transparent;
+  outline-offset: -1px;
+  transition: opacity 0.15s, outline-color 0.15s;
+}
+.thumb:hover { opacity: 1; }
+.thumb.active { opacity: 1; outline-color: var(--muted); }
+.thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.thumb .placeholder { width: 100%; height: 100%; aspect-ratio: auto; padding: 0; font-size: 10px; overflow: hidden; }
+
+.spot-main {
+  grid-column: 2;
+  grid-row: 1;
+  width: var(--spot-w);
+  height: var(--spot-h);
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+.spot-wrap { line-height: 0; max-width: 100%; max-height: 100%; }
+.spot-wrap img {
+  display: block;
+  max-width: var(--spot-w);
+  max-height: var(--spot-h);
+  width: auto;
+  height: auto;
+  cursor: zoom-in;
+  animation: fade-in 0.35s ease;
+}
+.spot-main .placeholder { width: calc(var(--spot-w) * 0.8); height: calc(var(--spot-h) * 0.8); aspect-ratio: auto; }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* arrows: small, under the bottom right corner of the image */
+.spot-nav { grid-column: 2; grid-row: 2; justify-self: end; display: flex; gap: 6px; margin-top: 6px; }
+.spot-arrow {
+  font-size: 18px;
+  line-height: 1;
+  color: var(--muted);
+  padding: 2px 6px;
+  transition: color 0.15s, transform 0.15s;
+}
+.spot-arrow:hover { color: var(--text); }
+.spot-arrow.prev:hover { transform: translateX(-2px); }
+.spot-arrow.next:hover { transform: translateX(2px); }
+
+/* ---------- GALLERY PAGES (years + tags): the grid ---------- */
+
+#gallery { padding: 0 var(--pad) 80px 0; }
+
+/* Each image is one third of the width (the same size as before), but only
+   the middle and right columns are used. The empty left column is where the
+   year preview pops up when you hover the menu, so nothing overlaps. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, calc((100% - 2 * var(--gap)) / 3));
+  justify-content: end;
+  gap: var(--gap);
+}
+.work {
+  position: relative;
+  margin: 0;
+  aspect-ratio: var(--tile-ratio);
+  cursor: zoom-in;
+  overflow: hidden;
+}
+.work img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.work .placeholder { width: 100%; height: 100%; aspect-ratio: auto; }
+.empty { color: var(--muted); }
+
+.work-info {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  padding: 6px 10px;
+  background: var(--box);
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+.work-info b { color: var(--text); }
+.work:hover .work-info { opacity: 1; }
+
+/* shown only when an image file hasn't been added yet */
+.placeholder {
+  border: 1px dashed var(--line);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 12px;
+  aspect-ratio: 4 / 5;
+}
+
+/* ---------- LIGHTBOX ----------
+   Click any image on the site: it opens as a pop-up in the middle of the
+   page. Click the image to zoom in, then move the mouse to look around.
+   Scroll to zoom more or less. Click again to zoom out. */
+
+#lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.95);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  z-index: 100;
+  padding: 40px 30px;
+}
+#lightbox.show { display: flex; animation: fade-in 0.2s ease; }
+.lb-stage { overflow: hidden; line-height: 0; cursor: zoom-in; }
+.lb-stage.zoomed { cursor: zoom-out; }
+.lb-stage img {
+  display: block;
+  max-width: 90vw;
+  max-height: 76vh;
+  width: auto;
+  height: auto;
+  transition: transform 0.25s ease;
+}
+.lb-stage.zoomed img { touch-action: none; }
+#lightbox .lb-caption { margin-top: 14px; color: var(--muted); text-align: center; }
+#lightbox .lb-caption b { color: var(--text); }
+#lightbox .lb-tags { margin-top: 4px; }
+#lightbox .lb-tags a { margin: 0 6px; color: var(--text); }
+#lightbox .lb-close, #lightbox .lb-prev, #lightbox .lb-next {
+  position: absolute;
+  cursor: pointer;
+  user-select: none;
+  padding: 12px;
+  color: var(--muted);
+}
+#lightbox .lb-prev, #lightbox .lb-next { font-size: 30px; }
+.lb-close { top: 14px; right: 18px; }
+.lb-prev { left: 12px; top: 50%; }
+.lb-next { right: 12px; top: 50%; }
+
+/* ---------- ABOUT / NOTES PAGES ---------- */
+
+.about { max-width: 520px; padding: 0 var(--pad) 80px 0; }
+.about h2 { font-size: var(--size); font-weight: var(--strong); margin: 0 0 6px; }
+.about section { margin-bottom: 28px; }
+.about p { margin: 0 0 12px; text-align: justify; hyphens: auto; -webkit-hyphens: auto; }
+.about-photo { margin: 34px 0 0; line-height: 0; }
+.about-photo img { display: block; width: 100%; height: auto; }
+.about-photo .placeholder { width: 100%; aspect-ratio: 16 / 9; line-height: 1.5; }
+
+/* ---------- NOTES PAGE ----------
+   A big rectangle in the middle of the page. Click anywhere inside it to
+   leave a note. Notes stay where they were placed. */
+
+.notespage { display: flex; justify-content: center; padding: 0 var(--pad) 60px 0; }
+.gb-wrap { width: min(760px, 100%); }
+.gb-hint { color: var(--muted); margin: 0 0 10px; }
+.gb-pad {
+  position: relative;
+  height: min(68vh, 560px);
+  border: 1px solid var(--line);
+  cursor: text;
+  overflow: hidden;
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.035) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+.gb-status { color: var(--muted); margin: 8px 0 0; min-height: 1.5em; }
+
+.gb-note {
+  position: absolute;
+  width: 170px;
+  max-width: 42%;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.92);
+  cursor: default;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.gb-note:hover { z-index: 5; }
+.gb-note .gb-name { display: block; color: var(--muted); margin-top: 3px; }
+
+.gb-form {
+  position: absolute;
+  z-index: 10;
+  width: 200px;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: default;
+}
+.gb-form textarea, .gb-form input[type="text"] {
+  font: inherit;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 0;
+  padding: 5px 6px;
+  width: 100%;
+  resize: none;
+  outline: none;
+  background: #fff;
+}
+.gb-form textarea { height: 78px; }
+.gb-form textarea:focus, .gb-form input[type="text"]:focus { border-color: var(--muted); }
+.gb-form .gb-row { display: flex; justify-content: space-between; align-items: center; }
+.gb-form button { color: var(--text); }
+.gb-form button:hover { text-decoration: underline; text-underline-offset: 3px; }
+.gb-form .gb-cancel { color: var(--muted); }
+.gb-hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+
+/* ---------- UPDATES + WORKS IN PROGRESS (wip) ----------
+   A feed: each update has its text on the left (justified on both sides)
+   and its pictures on the right, laid out like the film page. Newest first.
+   Every picture is cropped to a standard phone-photo shape so they all match:
+     1 picture  -> one big frame (wide, or tall if the photo is tall)
+     2 pictures -> two tall frames side by side
+     3-4        -> a 2 x 2 block of wide frames   */
+
+:root {
+  --wip-text-w: 340px;                 /* width of the text column */
+  --wip-w: min(42vw, 600px);           /* width of the picture column */
+  --wip-last-line: auto;               /* change to "justify" to stretch the last line of each paragraph too */
+}
+.wippage { display: flex; justify-content: flex-end; padding: 0 var(--pad) 90px 0; }
+.wip-block { width: calc(var(--wip-text-w) + 40px + var(--wip-w)); max-width: 100%; }
+.wip-head { color: var(--muted); margin-bottom: 36px; }
+.wip-head b { color: var(--text); }
+.wip-entry { display: flex; gap: 40px; align-items: flex-start; margin-bottom: 90px; }
+.wip-text {
+  width: var(--wip-text-w);
+  flex: 0 1 var(--wip-text-w);
+  min-width: 0;
+  text-align: justify;                 /* both sides of the box */
+  text-align-last: var(--wip-last-line);
+  hyphens: auto;
+  -webkit-hyphens: auto;
+}
+.wip-text p { margin: 0 0 10px; }
+.wip-meta { color: var(--muted); text-align: left; text-align-last: left; margin-bottom: 4px; }
+.wip-name { display: block; text-align: left; text-align-last: left; margin-bottom: 6px; }
+.wip-media { width: var(--wip-w); flex: none; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.wip-img { margin: 0; cursor: zoom-in; line-height: 0; overflow: hidden; background: #f4f4f2; aspect-ratio: 4 / 3; }
+.wip-img img { display: block; width: 100%; height: 100%; object-fit: cover; }   /* cropped to fill the frame */
+.wip-img .placeholder { width: 100%; height: 100%; aspect-ratio: auto; line-height: 1.5; }
+.wip-media.n1 { grid-template-columns: 1fr; }
+.wip-media.n1.portrait { grid-template-columns: 60%; }
+.wip-media.n1.portrait .wip-img { aspect-ratio: 3 / 4; }
+.wip-media.n2 .wip-img { aspect-ratio: 3 / 4; }
+html.dark .wip-img { background: #000; }
+
+/* the bird swarm easter egg */
+.swarm { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9997; }
+
+/* ---------- RANDOM PAGE ----------
+   One image all by itself, with its caption and tags underneath,
+   the same way they look in the pop-up viewer. */
+
+.randompage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 var(--pad) 60px 0;
+}
+.rand-stage { overflow: hidden; line-height: 0; cursor: zoom-in; }
+.rand-stage.zoomed { cursor: zoom-out; }
+.rand-stage img {
+  display: block;
+  max-width: min(760px, calc(100vw - var(--sidebar) - 2 * var(--pad)));
+  max-height: 70vh;
+  width: auto;
+  height: auto;
+  transition: transform 0.25s ease;
+}
+.rand-stage.zoomed img { touch-action: none; }
+.rand-stage .placeholder { width: min(420px, 60vw); line-height: 1.5; }
+.rand-caption { margin-top: 14px; color: var(--muted); text-align: center; }
+.rand-caption b { color: var(--text); }
+.rand-tags { margin-top: 4px; text-align: center; }
+.rand-tags a { margin: 0 6px; color: var(--text); }
+
+/* ---------- COLOR PAGE ----------
+   Color picker on the left, a picture on the right. */
+
+.colorpage {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: 36px;
+  padding: 0 var(--pad) 60px 0;
+}
+.cp-panel { width: 250px; flex: none; }
+.cp-swatch {
+  width: 220px;
+  height: 220px;
+  border: 1px dashed var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+.cp-swatch.filled { border: 1px solid var(--line); }
+.cp-values { margin-top: 14px; display: flex; flex-direction: column; gap: 1px; width: 220px; }
+.cp-row { display: flex; gap: 12px; text-align: left; padding: 2px 0; }
+.cp-row .k { width: 28px; color: var(--muted); }
+.cp-row .v { color: var(--text); }
+.cp-row:hover .v { text-decoration: underline; text-underline-offset: 3px; }
+.cp-row .ok { color: var(--muted); margin-left: auto; }
+.cp-tools { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.cp-tools[hidden], .cp-range[hidden], .cp-nav[hidden] { display: none; }
+.cp-tools button { color: var(--muted); }
+.cp-tools button:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.cp-tools button.on { color: var(--text); }
+.cp-range { color: var(--muted); display: flex; align-items: center; gap: 10px; }
+.cp-range input { width: 130px; accent-color: #999; }
+.cp-history { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 6px; width: 220px; }
+.cp-chip {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--line);
+  outline: 1px solid transparent;
+  outline-offset: 2px;
+}
+.cp-chip.active { outline-color: var(--muted); }
+.cp-note { margin: 16px 0 0; color: var(--muted); width: 220px; }
+
+.cp-picwrap { flex: none; max-width: 100%; }
+.cp-pic { position: relative; display: inline-block; line-height: 0; }
+.cp-pic.readable { cursor: crosshair; }
+.cp-pic img {
+  display: block;
+  max-width: var(--spot-w);
+  max-height: var(--spot-h);
+  width: auto;
+  height: auto;
+}
+.cp-pic .placeholder { width: calc(var(--spot-w) * 0.8); height: calc(var(--spot-h) * 0.8); aspect-ratio: auto; line-height: 1.5; }
+.cp-mask { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.cp-mask[hidden], .cp-mark[hidden] { display: none; }
+.cp-mark {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+  border: 1px solid #fff;
+  outline: 1px solid rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+.cp-under { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-top: 8px; }
+.cp-caption { color: var(--muted); }
+.cp-caption b { color: var(--text); }
+.cp-nav { display: flex; gap: 6px; flex: none; margin-top: -4px; }
+
+/* the magnifier that follows the mouse over the picture */
+.loupe {
+  position: fixed;
+  z-index: 9990;
+  padding: 6px;
+  background: var(--box);
+  border: 1px solid var(--line);
+  pointer-events: none;
+  display: none;
+}
+.loupe.show { display: block; }
+.loupe canvas { display: block; width: 99px; height: 99px; image-rendering: pixelated; }
+.loupe-hex { margin-top: 4px; color: var(--text); text-align: center; }
+
+/* ---------- EXPLORE PAGE ----------
+   A small justified block of tags in the middle (nudged left),
+   three little images in a row in the top right corner. */
+
+.explore {
+  position: relative;
+  min-height: calc(100vh - var(--name-h) - 20px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--pad) 40px 0;
+}
+.explore-tags {
+  width: 300px;                /* make the box wider or narrower here */
+  max-width: 100%;
+  margin-right: 12vw;          /* nudges the box left. Bigger number = further left, 0 = centered */
+  text-align: justify;         /* fills the box edge to edge... */
+  text-align-last: justify;    /* ...including the last line */
+  line-height: 2.2;
+}
+.explore-art {
+  position: absolute;
+  top: 0;
+  right: var(--pad);
+  display: flex;
+  gap: 10px;
+}
+.ex-art {
+  width: clamp(64px, 7.5vw, 110px);
+  aspect-ratio: 4 / 5;
+  cursor: zoom-in;
+  animation: fade-in 0.5s ease;
+}
+.explore-links {                /* the two links in the top LEFT corner */
+  position: absolute;
+  top: 0;
+  left: var(--pad);
+  display: flex;
+  gap: 10px;
+}
+.ex-link { display: block; text-align: center; color: var(--muted); }
+.ex-link span { display: block; margin-top: 4px; }
+.ex-link:hover { color: var(--text); text-decoration: none; }
+.ex-art.plain { cursor: pointer; }
+.ex-art img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.ex-art .placeholder { width: 100%; height: 100%; aspect-ratio: auto; padding: 4px; font-size: 10px; overflow: hidden; }
+
+/* ---------- HOME: CORNER IMAGE + BIRD ---------- */
+
+.corner {
+  position: fixed;
+  left: var(--pad);          /* lines up with the left edge of the menu */
+  bottom: var(--pad);
+  width: 150px;              /* size of the sky image: change both numbers */
+  height: 150px;
+  cursor: pointer;
+  z-index: 15;
+}
+.corner img { width: 100%; height: 100%; object-fit: cover; display: block; }   /* cover = fills the square */
+.corner .placeholder { width: 100%; height: 100%; aspect-ratio: auto; padding: 4px; }
+.corner-info {
+  position: absolute;
+  left: calc(100% + 8px);
+  bottom: 0;
+  padding: 6px 10px;
+  background: var(--box);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+.corner:hover .corner-info { opacity: 1; }
+
+.bird { position: fixed; z-index: 9998; pointer-events: none; line-height: 0; }
+
+/* ---------- PLUS-SIGN CURSOR (fixed checkerboard grid) + MESSAGES ---------- */
+
+.gridplus {
+  position: fixed;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 9999;
+  font-size: 14px;
+  line-height: 1;
+  animation: plus-fade 0.9s ease-out forwards;
+}
+@keyframes plus-fade {
+  0%   { opacity: 1; }
+  30%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+.toast {
+  position: fixed;
+  left: var(--pad);
+  bottom: var(--pad);
+  padding: 6px 10px;
+  background: var(--box);
+  color: var(--muted);
+  z-index: 9998;
+  animation: fade-in 0.3s ease;
+}
+
+/* Easter egg: type "grid" anywhere on the site to toggle graph paper */
+body.show-grid {
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+
+/* ---------- FILM PAGE ----------
+   Details on the left (small, gray), stills stacked on the right. */
+
+:root {
+  --film-info-w: 340px;              /* width of the text column */
+  --film-w: min(42vw, 600px);        /* width of the stills block (a block of 4 horizontal stills) */
+}
+.filmpage { display: flex; justify-content: flex-end; padding: 0 var(--pad) 90px 0; }
+.film-block { width: calc(var(--film-info-w) + 40px + var(--film-w)); max-width: 100%; }
+.film-head { color: var(--muted); margin-bottom: 36px; }
+.film-head b { color: var(--text); }
+.film-entry { display: flex; gap: 40px; align-items: flex-start; margin-bottom: 90px; }
+.film-info { width: var(--film-info-w); flex: 0 1 var(--film-info-w); min-width: 0; line-height: 1.5; }
+.film-title { display: block; color: var(--text); }
+.film-sub { color: var(--muted); margin-bottom: 14px; }
+.film-row { margin-bottom: 10px; }
+.film-label { display: block; color: var(--muted); }
+.film-text { margin-top: 14px; }
+.film-text p { margin: 0 0 10px; text-align: justify; hyphens: auto; -webkit-hyphens: auto; }
+.film-link { margin-top: 12px; }
+.film-link a { text-decoration: underline; text-underline-offset: 3px; }
+.film-media { width: var(--film-w); flex: none; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.film-still { margin: 0; cursor: zoom-in; line-height: 0; aspect-ratio: 16 / 9; overflow: hidden; background: #fff; }   /* each still is a standard horizontal frame (16:9); the picture is never cropped */
+.film-still img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.film-still .placeholder { width: 100%; height: 100%; aspect-ratio: auto; line-height: 1.5; }
+
+/* ---------- III PAGE (internet image index) ----------
+   The opposite of the rest of the site: lots of images, close together,
+   with just a thin white gap between everything. */
+
+.iiipage { --iii-gap: 4px; padding: 0 16px 90px 0; }
+.iii-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--iii-gap); margin-bottom: var(--iii-gap); }
+.iii-img { margin: 0; cursor: zoom-in; overflow: hidden; position: relative; line-height: 0; }
+.iii-img img { display: block; width: 100%; height: 100%; }
+.iii-img.tall { aspect-ratio: 4 / 5; }
+.iii-img.tall img { object-fit: cover; }
+.iii-img.sq { aspect-ratio: 1 / 1; }
+.iii-img.sq img { object-fit: contain; }
+.iii-img.book { aspect-ratio: 5 / 4; }
+.iii-img.book img { object-fit: cover; }
+/* the wide sketchbook scan: as tall as one square, as wide as two (the scan sits on white padding, so it's scaled up to fill) */
+.iii-img.wide { align-self: stretch; }
+.iii-img.wide img { position: absolute; left: 50%; top: 50%; width: 76%; height: auto; transform: translate(-50%, -50%); }
+.iii-img .placeholder { width: 100%; height: 100%; aspect-ratio: auto; line-height: 1.4; font-size: 10px; }
+.iii-label { position: absolute; left: 4px; top: 4px; z-index: 2; background: rgba(102, 102, 102, 0.9); color: #fff; font-size: 11px; line-height: 1; padding: 3px 5px; }
+
+/* the text under the two rows: runs the full width, in line with the seven pictures */
+.iii-text { margin: 22px 0 26px; }
+.iii-title { display: block; margin-bottom: 8px; color: var(--text); }
+.iii-text p { margin: 0 0 10px; text-align: justify; hyphens: auto; -webkit-hyphens: auto; }
+.iii-text p:last-child { margin-bottom: 0; }
+.iii-divider { text-align: center; margin: 26px 0 4px; line-height: 0; }
+.iii-divider img { display: inline-block; width: auto; image-rendering: pixelated; }   /* crisp pixels, centered */
+.iii-heads { display: grid; grid-template-columns: repeat(4, 1fr); column-gap: var(--iii-gap); margin: 0 0 8px; }
+.iii-heads .iii-head { grid-column: span 2; margin: 0; }
+.iii-heads .iii-head + .iii-head { grid-column: 3 / span 2; }
+.iii-heads.books { display: block; margin: 22px 0 8px; }
+.iii-strip { display: flex; justify-content: space-between; align-items: center; margin-top: 22px; }
+.pixel { display: block; image-rendering: pixelated; }
+
+/* sketchbook + scans (left) and webs (right): one grid of equal squares */
+.iii-split { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--iii-gap); }
+.iii-split .iii-img.sq { grid-column: auto; }
+
+.iii-books { display: grid; grid-template-columns: repeat(var(--n, 5), 1fr); gap: var(--iii-gap); margin-top: var(--iii-gap); }
+
+/* ---------- ROCK COLLECTION: a little column of squares at the bottom left of the 2025 page ----------
+   It sits in the empty left column, right next to the "these works were made in..."
+   note, with a space between them, and stacks upward from the bottom of the screen. */
+
+:root {
+  --note-w: calc((100vw - var(--sidebar) - var(--pad) - 2 * var(--gap)) / 3);   /* width of the left column */
+  --rocks-w: min(60px, calc((100vh - var(--name-h) - 2 * var(--pad) - 60px) / 10));   /* size of each rock square */
+  --rocks-space: 26px;                                                           /* the space between the note and the rocks */
+}
+#rocks {
+  position: fixed;
+  left: calc(var(--sidebar) + var(--note-w) - var(--rocks-w));
+  bottom: var(--pad);
+  width: var(--rocks-w);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 12;
+}
+.rocks-label { color: var(--muted); font-size: 10px; line-height: 1; text-align: center; margin-bottom: 3px; }
+.rock { display: block; width: var(--rocks-w); height: var(--rocks-w); padding: 0; overflow: hidden; background: #f4f4f2; cursor: zoom-in; }
+.rock img { display: block; width: 100%; height: 100%; object-fit: cover; transform: scale(2.1); transition: transform 0.2s; }   /* zoomed in on the middle, so the rock fills the square */
+.rock.swatch { cursor: copy; border: 0; }
+.rock.swatch:hover { opacity: 0.8; }
+.rock:hover img { transform: scale(2.6); }
+.rock .placeholder { width: 100%; height: 100%; font-size: 0; padding: 0; }
+/* on the 2025 page the note gets a bit narrower to make room for the rocks */
+.has-rocks .page-note { width: calc(var(--note-w) - var(--rocks-w) - var(--rocks-space)); }
+
+/* ---------- PAGE NOTE: the little caption at the bottom of a year/series page ----------
+   Sits in the empty left column of the grid, fixed to the bottom of the screen,
+   so it grows upward as you write more. Justified on both sides. */
+.page-note {
+  position: fixed;
+  left: var(--sidebar);
+  bottom: var(--pad);
+  width: calc((100vw - var(--sidebar) - var(--pad) - 2 * var(--gap)) / 3);
+  max-height: calc(100vh - var(--name-h) - 2 * var(--pad));
+  overflow-y: auto;
+  padding-right: 4px;
+  z-index: 10;
+  background: var(--bg);
+  scrollbar-width: none;
+}
+.page-note::-webkit-scrollbar { display: none; }
+.page-note p {
+  margin: 0 0 1em;
+  text-align: justify;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  color: var(--muted);
+  line-height: 1.55;
+}
+.page-note p:last-child { margin-bottom: 0; }
+.page-note a { text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---------- STUDIO PAGE: a wall photo with hoverable works ---------- */
+
+.studio { display: flex; justify-content: center; padding: 0 var(--pad) 60px 0; }
+.st-wrap { width: min(820px, 100%); }
+.st-hint { color: var(--muted); margin: 0 0 10px; }
+.st-frame {
+  height: min(68vh, 580px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.st-stage { position: relative; display: inline-block; max-width: 100%; line-height: 0; }
+.st-stage img { display: block; max-width: 100%; max-height: min(68vh, 580px); width: auto; height: auto; }
+.st-stage .placeholder { width: 400px; height: 300px; aspect-ratio: auto; line-height: 1.4; }
+.st-spot { position: absolute; cursor: help; }
+.st-spot:hover { outline: 1px solid rgba(102, 102, 102, 0.75); background: rgba(255, 255, 255, 0.14); }
+.st-spot::after {                       /* a small + in the middle of each work, shown when you're over the picture */
+  content: "+";
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 13px;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+.st-frame:hover .st-spot::after { opacity: 0.9; }
+.st-spot:hover::after { opacity: 0; }
+.st-bar { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 8px; gap: 16px; min-height: 1.5em; }
+.st-caption { color: var(--muted); line-height: 1.5; }
+.st-caption b { color: var(--text); }
+.st-nav { display: flex; gap: 6px; flex: none; }
+.st-tip {
+  position: fixed;
+  z-index: 200;
+  max-width: 260px;
+  padding: 6px 10px;
+  background: var(--box);
+  border: 1px solid var(--line);
+  line-height: 1.45;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+.st-tip.show { opacity: 1; }
+.st-tip b { color: var(--text); }
+
+/* mark mode (studio.html?mark) */
+.st-mark { margin-top: 18px; }
+.st-mark textarea { width: 100%; font: inherit; font-size: 11px; color: var(--text); border: 1px solid var(--line); padding: 8px; resize: vertical; background: var(--bg); }
+.st-row { display: flex; gap: 16px; margin-top: 6px; }
+.st-row button:hover { text-decoration: underline; text-underline-offset: 3px; }
+body:has(.st-mark) .st-stage { cursor: crosshair; touch-action: none; user-select: none; }
+body:has(.st-mark) .st-spot { pointer-events: none; outline: 1px solid rgba(102, 102, 102, 0.8); background: rgba(255, 255, 255, 0.18); }
+body:has(.st-mark) .st-spot::after { display: none; }
+.st-spot i { position: absolute; left: 3px; top: 2px; font-style: normal; font-size: 11px; line-height: 1; color: #fff; background: rgba(102, 102, 102, 0.9); padding: 2px 4px; }
+.st-spot.live { outline: 1px dashed rgba(102, 102, 102, 0.9); }
+
+/* ---------- PHONES / NARROW SCREENS ---------- */
+
+@media (max-width: 760px) {
+  :root { --pad: 18px; --name-h: 56px; --gap: 20px; --spot-w: calc(100vw - 36px); --spot-h: 110vw; }
+  body { display: block; }
+  .name-bar { padding-top: 18px; }
+  #site-header nav { position: static; max-height: none; flex-direction: row; flex-wrap: wrap; gap: 4px 18px; padding: 0 var(--pad) 18px; }
+  .dropdown { display: contents; }
+  .dropdown .label { display: none; }
+  .dropdown-menu { display: contents; padding: 0; }
+  .tagpanel { flex-direction: row; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; }
+  .tagpanel .tp-label { margin-top: 0; width: 100%; }
+  #spotlight, #gallery, .about { padding: 0 var(--pad) 60px; }
+  #spotlight { grid-template-columns: 1fr; }
+  .spot-main { grid-column: 1; justify-content: center; }
+  .spot-caption { grid-column: 1; grid-row: 2; justify-self: start; text-align: left; margin-top: 6px; }
+  .spot-nav { grid-column: 1; }
+  .spot-thumbs { grid-column: 1; grid-row: 3; align-self: start; justify-self: center; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
+  .explore { padding: 0 var(--pad) 40px; }
+  .explore-tags { width: min(300px, 100%); margin-right: 0; }
+  .explore-links { left: var(--pad); }
+  .explore-links .ex-art, .explore-art .ex-art { width: 52px; }
+  .explore-art { gap: 6px; }
+  .explore-links { gap: 6px; }
+  .corner { position: relative; margin: 0 var(--pad) 40px; }   /* sits in the page on phones */
+  .corner-info { left: 0; top: 100%; bottom: auto; margin-top: 6px; opacity: 1; }   /* caption under it: no hover on touch screens */
+  .rand-stage img { max-width: calc(100vw - 2 * var(--pad)); }
+  .wippage { padding: 0 var(--pad) 60px; }
+  .wip-block { width: 100%; }
+  .wip-entry { flex-direction: column; gap: 14px; margin-bottom: 56px; }
+  .wip-media { order: 1; width: 100%; }
+  .wip-text { order: 2; width: 100%; flex: none; }
+  .colorpage { flex-direction: column; padding: 0 var(--pad) 60px; gap: 24px; }
+  .cp-panel { order: 2; width: 100%; }
+  .cp-pic img { max-width: calc(100vw - 2 * var(--pad)); }
+  #year-preview { display: none; }
+  .grid { grid-template-columns: repeat(2, 1fr); justify-content: stretch; }   /* phones: two columns, full width */
+  .gb-pad { height: 60vh; }
+  .iiipage { padding: 0 var(--pad) 60px; }
+  .iii-row { grid-template-columns: repeat(4, 1fr); }
+  .iii-heads { grid-template-columns: 1fr 1fr; }
+  .iii-heads .iii-head, .iii-heads .iii-head + .iii-head { grid-column: auto; }
+  .iii-strip { flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .iii-books { grid-template-columns: repeat(2, 1fr); }
+  .filmpage { padding: 0 var(--pad) 60px; }
+  .film-block { width: 100%; }
+  .film-entry { flex-direction: column; gap: 14px; margin-bottom: 56px; }
+  .film-info, .film-media { width: 100%; flex: none; }
+  #rocks { position: static; width: auto; flex-direction: row; flex-wrap: wrap; align-items: center; width: auto; margin: 0 var(--pad) 40px; }
+  .rocks-label { width: 100%; text-align: left; }
+  .has-rocks .page-note { width: auto; }
+  .page-note { position: static; width: auto; max-height: none; margin: 0 var(--pad) 50px; padding: 0; }
+  .studio { padding: 0 var(--pad) 50px; }
+  .st-frame { height: auto; min-height: 220px; }
+  .st-stage img { max-height: 70vh; }
+  .st-spot::after { opacity: 0.9; }
+}
+@media (hover: none) {
+  /* no hover on touch screens, so show captions all the time */
+  .work-info { opacity: 1; }
+}
+
+
+/* ---------- BLACK PAPER PAGE: the whole site inverted (black background) ----------
+   <html class="dark"> flips the colors. The pictures sit in three equal columns
+   that fill the page, in a tight Tumblr-style grid. */
+html.dark {
+  --bg: #000000;
+  --text: #999999;
+  --muted: #666666;
+  --line: #2a2a2a;
+  --box: rgba(0, 0, 0, 0.82);
+}
+html.dark #lightbox { background: rgba(0, 0, 0, 0.96); }
+html.dark .gb-note, html.dark .gb-form, html.dark .gb-form textarea, html.dark .gb-form input[type="text"] { background: #000; }
+html.dark .work { background: #000; }
+
+#gallery.three { padding: 0 var(--pad) 80px 0; --three-gap: 10px; --tile-ratio: 1 / 1; }   /* squarer tiles = less empty black between rows */
+#gallery.three .grid {
+  grid-template-columns: repeat(3, 1fr);
+  justify-content: stretch;
+  gap: var(--three-gap);
+}
+@media (max-width: 760px) {
+  #gallery.three .grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* the text box under the black paper grid: same design as the iii text box, in neon.
+   Change --neon to any bright color (try #9dff6e green, #7df9ff cyan, #ffe45e yellow). */
+html.dark { --neon: #ff7ad9; }
+.bp-main #gallery.three { padding-bottom: 0; }
+.series-text { margin: 30px var(--pad) 90px 0; }
+.grid .series-text.grid-tail {            /* as the last tile of the grid: same size as a picture, text at the top */
+  margin: 0; grid-column: 3; aspect-ratio: var(--tile-ratio); overflow: auto; scrollbar-width: none;
+  padding: 2px 4px 0 0;
+}
+.grid .series-text.grid-tail::-webkit-scrollbar { display: none; }
+.series-text .iii-title { color: var(--neon); }
+.series-text p { color: var(--neon); margin: 0 0 10px; text-align: justify; hyphens: auto; -webkit-hyphens: auto; }
+.series-text p:last-child { margin-bottom: 0; }
+@media (max-width: 760px) { .series-text { margin: 24px var(--pad) 60px; } .grid .series-text.grid-tail { grid-column: auto; aspect-ratio: auto; margin: 0; } }

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- private for now: keeps search engines from listing this page.
+       delete these two lines when you want people to find it. -->
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta name="referrer" content="no-referrer">
+  <title>mind palace</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="room.css">
+</head>
+<body>
+
+  <header id="site-header"></header>
+
+  <!-- THE ROOM. The lists (grid threads, lineages, Agnes Martin links)
+       are in room-data.js; the workings in room.js; the frame in base.js. -->
+  <main class="room" id="room"></main>
+
+  <!-- your works list, read straight from your portfolio site (see PORTFOLIO in base.js) -->
+  <script src="https://trinitylester.trinityl-lester.workers.dev/works.js"></script>
+  <script src="base.js"></script>
+  <script src="room-data.js"></script>
+  <script src="room.js"></script>
+</body>
+</html>
