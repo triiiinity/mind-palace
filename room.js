@@ -2052,7 +2052,7 @@
   const QUIZ = [
     { key: "name", q: "what's your name?", ph: "your name" },
     { key: "artist", q: "who is your favorite artist?", ph: "an artist you love" },
-    { key: "word", q: "what always inspires you?", ph: "one word is enough: moss, the grid, the ocean…" }
+    { key: "word", q: "what do you want to see?", ph: "one word is enough: moss, the grid, the ocean…" }
   ];
 
   function showQuiz(step = 0, ans = {}) {
