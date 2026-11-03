@@ -58,9 +58,15 @@ function currentPage() {
 function renderHeader() {
   const header = document.getElementById("site-header");
   if (!header) return;
-  const items = MENU.map((m) => `<div class="menu-step"><span class="menu-label">${m.step}</span>${m.pages.map(([k, label]) =>
-    `<a href="#${k}" data-page="${k}">${label}</a>`).join("")}</div>`).join("");
+  // each step shows just its name; hover (or tap) it and its pages drop down
+  const items = MENU.map((m) => `<div class="menu-step"><button type="button" class="menu-label">${m.step}</button><div class="menu-pages">${m.pages.map(([k, label]) =>
+    `<a href="#${k}" data-page="${k}">${label}</a>`).join("")}</div></div>`).join("");
   header.innerHTML = `<div class="name-bar"><a href="#home">${SITE_NAME}</a></div><nav class="menu">${items}</nav>`;
+  header.querySelectorAll(".menu-label").forEach((b) => b.addEventListener("click", () => {
+    const step = b.parentElement, was = step.classList.contains("open");
+    header.querySelectorAll(".menu-step").forEach((x) => x.classList.remove("open"));
+    step.classList.toggle("open", !was);
+  }));
   markMenu();
   window.addEventListener("hashchange", markMenu);
 }
@@ -70,6 +76,11 @@ function markMenu() {
   const h = decodeURIComponent(location.hash.slice(1));
   const page = h.startsWith("artist/") ? "artists" : h;
   document.querySelectorAll("#site-header [data-page]").forEach((a) => a.classList.toggle("current", a.dataset.page === page));
+  // the step you're in stays a little open so you can see where you are
+  document.querySelectorAll("#site-header .menu-step").forEach((st) => {
+    st.classList.toggle("here", !!st.querySelector(".current"));
+    st.classList.remove("open");
+  });
 }
 
 /* ---------- THE GRID: shows through wherever you click on empty space ---------- */

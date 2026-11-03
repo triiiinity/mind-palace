@@ -680,3 +680,33 @@ body.rm-noscroll { overflow: hidden; }
 .rm-igrow b { font-size: 18px; font-weight: 400; color: var(--text); text-align: right; }
 .rm-igrow .rm-why { grid-column: 1 / -1; text-align: right; font-size: 10px; }
 .rm-igpop p { margin: 8px 0 2px; font-size: 10px; }
+
+/* home: the room's name and the floating cloud */
+.room .rm-roomname { font-size: 22px; font-weight: 400; color: var(--text); margin: 0; letter-spacing: -0.01em; }
+.rm-cloud { position: relative; height: max(460px, calc(100vh - 220px)); overflow: hidden; pointer-events: none; user-select: none; }
+.rm-cl { position: absolute; left: 0; top: 0; will-change: transform, opacity; white-space: nowrap; }
+.rm-cl.word { font-size: 15px; color: var(--text); }
+.rm-cl.word.big { font-size: 20px; }
+.rm-cl.word.it { font-style: italic; color: var(--muted); }
+.rm-cl.word i { display: block; font-style: normal; font-size: 10px; color: var(--muted); text-align: center; }
+.rm-cl.color { width: 34px; height: 34px; }
+.rm-cl.pic img { display: block; max-width: 120px; max-height: 120px; }
+.rm-cl.pic.rock img { filter: grayscale(.3); }
+
+/* the intro: three questions */
+.rm-quiz { max-width: 520px; margin: 9vh auto 0; text-align: left; }
+.rm-quiz h2 { font-size: 22px; font-weight: 400; color: var(--text); margin: 4px 0 18px; }
+.rm-quiz form { display: flex; gap: 8px; margin-bottom: 14px; }
+.rm-quiz input { flex: 1; font-size: 15px; padding: 8px 10px; }
+.rm-code { font-family: "Courier New", ui-monospace, monospace; font-size: 22px; color: #000; letter-spacing: 1px; margin: 4px 0 12px; user-select: all; }
+.rm-code.small { font-size: 15px; margin: 2px 0 6px; }
+
+/* plants: bigger, in color */
+.rm-plant { font-size: 15px; font-weight: 700; }
+.rm-plant b { font-weight: 700; }
+.rm-plant.thirsty { filter: saturate(.35) brightness(1.1); }
+.rm-plant.tiny { font-size: 9px; }
+.rm-gcell .rm-plant { font-size: 19px; }
+.rm-garden-big.small .rm-gcell .rm-plant { font-size: 13px; }
+.rm-gcell { width: 190px; }
+.rm-garden { gap: 14px; }

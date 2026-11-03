@@ -29,7 +29,5 @@ Cloudflare → **Workers & Pages** → **mind-palace** → **Settings** → **Va
 
 Save. Then triple-click "right now" on your profile: the counts appear.
 
-## 5. (optional) make the keys renew themselves
-Without this, make new keys every ~2 months (step 3 + 4 again; the pop-up says when one runs out).
-1. Cloudflare → **Storage & Databases → KV** → **Create** → name it `ig-keys`. Copy its **ID**.
-2. Tell Claude the ID. It adds it to `wrangler.jsonc` and every Monday the site renews both keys.
+## 5. keys renew themselves
+Nothing to do: the site has its own storage space now, and every Monday it renews both keys.

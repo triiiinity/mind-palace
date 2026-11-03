@@ -75,7 +75,7 @@
     store.set("palace", palace); store.set("legend", legend);
     store.set("natureTags", natureTags); store.set("colors", colors); store.set("combos", combos);
     store.set("lists", lists); store.set("share", share); store.set("goals", goals); store.set("notes", notes);
-    if (gardenReady) drawGarden();
+    if (gardenReady) { drawGarden(); cloudSoon(); }
   }
 
   const isMine = (name) => mine.some((m) => plain(m.name) === plain(name));
@@ -1776,39 +1776,85 @@
     c.querySelector(".rm-x").addEventListener("click", () => { c.hidden = true; });
   }
 
+  function exportData() {
+    return { room: 4, exported: new Date().toISOString(), mine, dismissed, lineAdds, collection, ideas, commissions, palace, legend, natureTags, colors, combos, lists, share, goals, notes };
+  }
+
   function exportAll() {
-    const data = { room: 4, exported: new Date().toISOString(), mine, dismissed, lineAdds, collection, ideas, commissions, palace, legend, natureTags, colors, combos, lists, share, goals, notes };
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(exportData(), null, 2)], { type: "application/json" }));
     a.download = `mind-palace-backup-${today()}.json`;
     a.click();
+  }
+
+  // bring a backup (or a room saved under a code) into this browser.
+  // merge: anything already here stays, the backup adds what's missing.
+  // fresh = this browser has nothing of its own yet, so the room's name, "now" and settings come along too
+  function importData(d, fresh) {
+    if (!d || !d.room) throw new Error("not a room backup");
+    const merge = (here, there, key) => here.concat((there || []).filter((t) => !here.some((m) => m[key] === t[key])));
+    mine = mine.concat((d.mine || []).filter((t) => !isMine(t.name)));
+    collection = merge(collection, d.collection, "id");
+    ideas = merge(ideas, d.ideas, "id");
+    commissions = merge(commissions, d.commissions, "id");
+    (d.palace ? d.palace.words : []).forEach((w) => { if (!palace.words.some((x) => plain(x.label) === plain(w.label))) palace.words.push(w); });
+    (d.palace ? d.palace.links : []).forEach((l) => { if (palace.words.some((w) => w.id === l.a) && palace.words.some((w) => w.id === l.b) && !palace.links.some((x) => x.id === l.id)) palace.links.push(l); });
+    dismissed = [...new Set(dismissed.concat(d.dismissed || []))];
+    colors = merge(colors, d.colors, "id");
+    combos = merge(combos, d.combos, "id");
+    lists = fresh && d.lists ? d.lists : merge(lists, d.lists, "id");
+    goals = merge(goals, d.goals, "id");
+    notes = fresh && d.notes ? d.notes : merge(notes, d.notes, "id");
+    if (d.share) {
+      share.posts = merge(share.posts, d.share.posts, "id");
+      if (!share.instagram) share.instagram = d.share.instagram || "";
+      if (fresh) { share.roomName = d.share.roomName || share.roomName; share.now = d.share.now || share.now; share.artist = d.share.artist !== false; }
+      if (d.share.code && !share.code) share.code = d.share.code;
+    }
+    natureTags = natureTags.concat((d.natureTags || []).filter((t) => !natureTags.some((n) => plain(n.t) === plain(t.t))));
+    Object.entries(d.lineAdds || {}).forEach(([k, list]) => { lineAdds[k] = [...new Set((lineAdds[k] || []).concat(list))]; });
+    saveAll();
   }
 
   function importAll(e) {
     const file = e.target.files[0];
     if (!file) return;
-    file.text().then((txt) => {
-      const d = JSON.parse(txt);
-      if (!d.room) throw new Error("not a room backup");
-      // merge: anything already here stays, the backup adds what's missing
-      const merge = (here, there, key) => here.concat((there || []).filter((t) => !here.some((m) => m[key] === t[key])));
-      mine = mine.concat((d.mine || []).filter((t) => !isMine(t.name)));
-      collection = merge(collection, d.collection, "id");
-      ideas = merge(ideas, d.ideas, "id");
-      commissions = merge(commissions, d.commissions, "id");
-      (d.palace ? d.palace.words : []).forEach((w) => { if (!palace.words.some((x) => plain(x.label) === plain(w.label))) palace.words.push(w); });
-      (d.palace ? d.palace.links : []).forEach((l) => { if (palace.words.some((w) => w.id === l.a) && palace.words.some((w) => w.id === l.b) && !palace.links.some((x) => x.id === l.id)) palace.links.push(l); });
-      dismissed = [...new Set(dismissed.concat(d.dismissed || []))];
-      colors = merge(colors, d.colors, "id");
-      combos = merge(combos, d.combos, "id");
-      lists = merge(lists, d.lists, "id");
-      goals = merge(goals, d.goals, "id");
-      notes = merge(notes, d.notes, "id");
-      if (d.share) { share.posts = merge(share.posts, d.share.posts, "id"); if (!share.instagram) share.instagram = d.share.instagram || ""; }
-      natureTags = natureTags.concat((d.natureTags || []).filter((t) => !natureTags.some((n) => plain(n.t) === plain(t.t))));
-      Object.entries(d.lineAdds || {}).forEach(([k, list]) => { lineAdds[k] = [...new Set((lineAdds[k] || []).concat(list))]; });
-      saveAll(); showCollection();
-    }).catch(() => alertLine("that file isn't a room backup"));
+    file.text().then((txt) => { importData(JSON.parse(txt)); store.set("setup", true); showCollection(); })
+      .catch(() => alertLine("that file isn't a room backup"));
+  }
+
+  /* ---------- SAVE CODE: your room, saved online under a code ----------
+     After the intro you get a code like trinity-k3x9qa. Everything you do is
+     saved under it (a few seconds after each change). On another browser,
+     type the code on the intro page and your room comes back.
+     Keep the code private: it's the key to your room.                  */
+
+  let cloudTimer = null, cloudState = "";
+  const makeCode = (name) => (plain(name).replace(/[^a-z0-9]+/g, "").slice(0, 16) || "room") + "-" +
+    Array.from(crypto.getRandomValues(new Uint8Array(6)), (n) => "abcdefghjkmnpqrstuvwxyz23456789"[n % 31]).join("");
+
+  function cloudSoon() {
+    if (!share.code || !gardenReady) return;
+    clearTimeout(cloudTimer);
+    cloudTimer = setTimeout(cloudSave, 4000);
+  }
+  async function cloudSave() {
+    if (!share.code) return false;
+    try {
+      const r = await fetch("/api/room/" + encodeURIComponent(share.code), { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(exportData()) });
+      cloudState = r.ok ? "saved " + new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).toLowerCase() : r.status === 503 ? "online saving isn't switched on yet" : "couldn't save (" + r.status + ")";
+      store.set("cloudAt", r.ok ? Date.now() : store.get("cloudAt", 0));
+    } catch (e) { cloudState = "couldn't reach the site (saved in this browser)"; }
+    const el = $("rm-cloudst"); if (el) el.textContent = cloudState;
+    return cloudState.startsWith("saved");
+  }
+  async function cloudLoad(code) {
+    const r = await fetch("/api/room/" + encodeURIComponent(code.trim().toLowerCase()), { cache: "no-store" });
+    if (r.status === 404) throw new Error("no room with that code");
+    if (!r.ok) throw new Error(r.status === 503 ? "online saving isn't switched on yet" : "couldn't reach the site");
+    const d = await r.json();
+    importData(d, !store.get("setup"));
+    share.code = code.trim().toLowerCase(); store.set("setup", true); saveAll();
   }
 
   function alertLine(msg) {
@@ -1946,39 +1992,119 @@
      real photographs of rocks hold the places.
      ============================================================ */
 
-  async function showHome() {
+  function showHome() {
+    if (!store.get("setup")) return showQuiz();
     const v = $("rm-view");
-    const counts = {
-      1: `${palace.words.length} words · ${mine.length} artists`,
-      2: `${collection.length} saved pictures`,
-      3: `${colors.length} colors · ${ideas.length} ideas · ${lists.length} lists`,
-      4: `${share.posts.length} things made`
-    };
-    const tiles = shuffle([
-      ...shuffle(palace.words).slice(0, 12).map((w) => ({ kind: "word", text: w.label, href: "#bin" })),
-      ...shuffle(collection.filter((w) => w.thumb)).slice(0, 12).map((w) => ({ kind: "pic", src: w.thumb, text: w.title, href: "#collection" })),
-      ...shuffle(colors).slice(0, 8).map((c) => ({ kind: "color", hex: c.hex, href: "#bank" })),
-      ...ideas.filter((i) => i.title).slice(0, 4).map((i) => ({ kind: "word", text: i.title, small: "idea · " + i.status, href: "#ideas" })),
-      ...share.now.filter((n) => n.title).map((n) => ({ kind: "word", text: n.title, small: n.label, href: "#share" })),
-      ...share.posts.filter((p) => p.img).slice(0, 4).map((p) => ({ kind: "pic", src: p.img, text: p.title, href: "#share" }))
-    ]);
-    v.innerHTML = `
-      <div class="rm-hometop">
-        <h2>${esc(share.roomName || "my room")}</h2>
-        <div class="rm-homesteps">${STEPS.map((st) => `<a href="#${st.pages[0][0]}"><b>${st.n} ${st.label}</b><span class="rm-why">${st.line}<br>${counts[st.n]}</span></a>`).join("")}</div>
-      </div>
-      <div class="rm-home" id="rm-home">${tiles.map(homeTile).join("")}</div>`;
-    const want = 24 - tiles.length;
-    if (want > 0) {
-      const rocks = shuffle(await natureFor("rocks").catch(() => [])).slice(0, want);
-      const box = $("rm-home");
-      if (box && location.hash.replace("#", "") in { "": 1, home: 1 }) box.insertAdjacentHTML("beforeend", rocks.map((w) => homeTile({ kind: "pic", src: w.thumb, text: "placeholder · " + w.artist.replace(/^photo: /, ""), href: "#nature", rock: true })).join(""));
-    }
+    v.innerHTML = `<h2 class="rm-roomname">${esc(share.roomName || "my room")}</h2><div class="rm-cloud" id="rm-cloud" aria-hidden="true"></div>`;
+    startCloud($("rm-cloud"));
   }
-  function homeTile(t) {
-    if (t.kind === "color") return `<a class="rm-htile color" href="${t.href}" style="background:${esc(t.hex)}" title="${esc(t.hex)}"></a>`;
-    if (t.kind === "pic") return `<a class="rm-htile pic${t.rock ? " rock" : ""}" href="${t.href}"><img src="${esc(t.src)}" alt="" loading="lazy" referrerpolicy="no-referrer"><span>${esc(t.text || "")}</span></a>`;
-    return `<a class="rm-htile word" href="${t.href}"><b>${esc(t.text)}</b>${t.small ? `<span class="rm-why">${esc(t.small)}</span>` : ""}</a>`;
+
+  /* THE CLOUD: everything you've gathered (words, colors, pictures, artists,
+     ideas, what you're into right now) floating in a slow oval, drifting to
+     the front and back again. Just to look at. */
+  async function startCloud(box) {
+    const items = [
+      ...shuffle(palace.words).slice(0, 26).map((w) => ({ t: "word", text: w.label })),
+      ...shuffle(collection.filter((w) => w.thumb)).slice(0, 18).map((w) => ({ t: "pic", src: w.thumb })),
+      ...shuffle(colors).slice(0, 14).map((c) => ({ t: "color", hex: c.hex })),
+      ...mine.slice(0, 8).map((m) => ({ t: "word", text: m.name, big: true })),
+      ...ideas.filter((i) => i.title).slice(0, 6).map((i) => ({ t: "word", text: i.title, italic: true })),
+      ...share.now.filter((n) => n.title).map((n) => ({ t: "word", text: n.title, small: n.label })),
+      ...share.posts.filter((p) => p.img).slice(0, 6).map((p) => ({ t: "pic", src: p.img }))
+    ];
+    if (items.filter((x) => x.t === "pic").length < 8) {      // not many pictures yet: real photographs of rocks hold the places
+      const rocks = shuffle(await natureFor("rocks").catch(() => [])).slice(0, 10);
+      rocks.forEach((w) => items.push({ t: "pic", src: w.thumb, rock: true }));
+    }
+    if (!box.isConnected) return;
+    const list = shuffle(items);
+    const n = list.length;
+    box.innerHTML = list.map((x) => x.t === "pic" ? `<span class="rm-cl pic${x.rock ? " rock" : ""}"><img src="${esc(x.src)}" alt="" referrerpolicy="no-referrer"></span>`
+      : x.t === "color" ? `<span class="rm-cl color" style="background:${esc(x.hex)}"></span>`
+      : `<span class="rm-cl word${x.big ? " big" : ""}${x.italic ? " it" : ""}">${esc(x.text)}${x.small ? `<i>${esc(x.small)}</i>` : ""}</span>`).join("");
+    const els = [...box.children];
+    // each thing gets a place on an egg-shaped cloud (spread evenly, like seeds in a sunflower)
+    const pts = els.map((el, k) => {
+      const y = 1 - (k + 0.5) / n * 2, r = Math.sqrt(1 - y * y), th = k * 2.39996;
+      return { el, y, r, th, bob: Math.random() * 6.28, sp: 0.6 + Math.random() * 0.8 };
+    });
+    let t0 = performance.now();
+    const frame = (now) => {
+      if (!box.isConnected) return;                            // left the home page: stop
+      const W = box.clientWidth, H = box.clientHeight, t = (now - t0) / 1000, spin = t * 0.07;
+      pts.forEach((p) => {
+        const a = p.th + spin, z = p.r * Math.sin(a);           // z: -1 at the back, 1 at the front
+        const x = W / 2 + p.r * Math.cos(a) * W * 0.42;
+        const y = H / 2 + p.y * H * 0.36 + Math.sin(t * p.sp + p.bob) * 8;
+        const k = (z + 1) / 2;                                  // 0 back … 1 front
+        p.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -50%) scale(${(0.45 + 0.7 * k).toFixed(3)})`;
+        p.el.style.opacity = (0.18 + 0.82 * k).toFixed(3);
+        p.el.style.zIndex = Math.round(k * 100);
+        p.el.style.filter = k < 0.4 ? `blur(${((0.4 - k) * 4).toFixed(1)}px)` : "none";
+      });
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  }
+
+  /* THE INTRO: three quick questions the first time someone opens the site.
+     The answers start their room. Question 3 can be anything: change it here. */
+  const QUIZ = [
+    { key: "name", q: "what's your name?", ph: "your name" },
+    { key: "artist", q: "who is your favorite artist?", ph: "an artist you love" },
+    { key: "word", q: "what always inspires you?", ph: "one word is enough: moss, the grid, the ocean…" }
+  ];
+
+  function showQuiz(step = 0, ans = {}) {
+    const v = $("rm-view");
+    if (step === "code") {
+      v.innerHTML = `<div class="rm-quiz">
+        <p class="rm-why">your room is ready.</p>
+        <h2>${esc(share.roomName)}</h2>
+        <p>your save code:</p>
+        <p class="rm-code">${esc(share.code)}</p>
+        <p class="rm-why">everything you do here is saved under this code. write it down: type it on any browser to open your room there. keep it to yourself, it's the key.</p>
+        <p class="rm-why" id="rm-cloudst">saving…</p>
+        <button type="button" class="rm-btn" id="rm-enter">go in →</button></div>`;
+      cloudSave();
+      $("rm-enter").addEventListener("click", () => { location.hash = "#home"; showHome(); });
+      return;
+    }
+    if (step === "load") {
+      v.innerHTML = `<div class="rm-quiz"><p class="rm-why">open your room</p><h2>what's your save code?</h2>
+        <form id="rm-qform"><input name="a" placeholder="name-abc123" autocomplete="off" required><button type="submit" class="rm-btn">open</button></form>
+        <p class="rm-why" id="rm-qst"></p><button type="button" class="rm-why" id="rm-qback">← start a new room instead</button></div>`;
+      $("rm-qform").a.focus();
+      $("rm-qback").addEventListener("click", () => showQuiz(0));
+      $("rm-qform").addEventListener("submit", async (e) => {
+        e.preventDefault(); $("rm-qst").textContent = "looking…";
+        try { await cloudLoad(e.target.a.value); showHome(); } catch (err) { $("rm-qst").textContent = err.message; }
+      });
+      return;
+    }
+    const Q = QUIZ[step];
+    v.innerHTML = `<div class="rm-quiz">
+      <p class="rm-why">${step + 1} / ${QUIZ.length}</p>
+      <h2>${Q.q}</h2>
+      <form id="rm-qform"><input name="a" placeholder="${esc(Q.ph)}" value="${esc(ans[Q.key] || "")}" autocomplete="off" required><button type="submit" class="rm-btn">${step < QUIZ.length - 1 ? "next" : "start"}</button></form>
+      ${step === 0 ? `<p class="rm-why"><button type="button" class="rm-why" id="rm-qload">already have a room? enter your save code</button></p>` : `<button type="button" class="rm-why" id="rm-qback">← back</button>`}
+    </div>`;
+    const f = $("rm-qform");
+    f.a.focus();
+    if (step === 0) $("rm-qload").addEventListener("click", () => showQuiz("load"));
+    else $("rm-qback").addEventListener("click", () => showQuiz(step - 1, ans));
+    f.addEventListener("submit", (e) => {
+      e.preventDefault();
+      ans[Q.key] = f.a.value.trim();
+      if (step < QUIZ.length - 1) return showQuiz(step + 1, ans);
+      share.roomName = ans.name.replace(/'s room$/i, "") + "'s room";
+      addArtist(ans.artist);
+      addWords(ans.word);
+      share.code = share.code || makeCode(ans.name);
+      store.set("setup", true);
+      saveAll();
+      showQuiz("code");
+    });
   }
 
   /* ============================================================
@@ -2346,6 +2472,11 @@
           <div class="rm-states" id="rm-artist"><button type="button" data-a="1" class="${share.artist ? "on" : ""}">I am an artist</button><button type="button" data-a="0" class="${share.artist ? "" : "on"}">I am not (yet)</button></div>
           ${share.artist ? `<p class="rm-row"><input id="rm-ig" value="${esc(share.instagram)}" placeholder="instagram handle" size="18">${share.instagram ? ` <a href="https://instagram.com/${esc(share.instagram.replace(/^@/, ""))}" target="_blank" rel="noopener">↗</a>` : ""}</p>` : ""}
 
+          <h4 class="rm-gap">save</h4>
+          ${share.code ? `<p class="rm-why">your save code (type it on any browser to open your room there; keep it private):</p><p class="rm-code small">${esc(share.code)}</p>` : `<p class="rm-why">no save code yet.</p>`}
+          <p class="rm-row">${share.code ? `<button type="button" id="rm-savenow">save now</button>` : `<button type="button" id="rm-makecode">make my save code</button>`} <button type="button" id="rm-dlback">download a backup</button></p>
+          <p class="rm-why" id="rm-cloudst">${esc(cloudState || (store.get("cloudAt", 0) ? "last saved " + new Date(store.get("cloudAt")).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).toLowerCase() : ""))}</p>
+
           <h4 class="rm-gap rm-secret" id="rm-rightnow">right now</h4>
           <p class="rm-why">what life is feeding the art: now listening, now watching, now reading, now loving…</p>
           <div id="rm-now">${share.now.map((n, k) => `<div class="rm-nowrow" data-k="${k}"><input data-f="label" value="${esc(n.label)}" size="12"><input data-f="title" value="${esc(n.title)}" placeholder="what" size="16"><input data-f="by" value="${esc(n.by || "")}" placeholder="by" size="12"><button type="button" class="rm-del" data-x="${k}">×</button></div>`).join("")}</div>
@@ -2364,6 +2495,9 @@
         </div>
       </div>`;
     drawMyWork($("rm-mywork"));
+    if ($("rm-savenow")) $("rm-savenow").addEventListener("click", () => { $("rm-cloudst").textContent = "saving…"; cloudSave(); });
+    if ($("rm-makecode")) $("rm-makecode").addEventListener("click", () => { share.code = makeCode(share.roomName.replace(/'s room$/i, "")); store.set("setup", true); saveAll(); cloudSave(); showShare(); });
+    $("rm-dlback").addEventListener("click", exportAll);
     // the secret: click "right now" three times for your instagram follower counts
     $("rm-rightnow").addEventListener("click", (e) => { if (e.detail === 3) openFollowers(); });
     $("rm-rname").addEventListener("input", (e) => { share.roomName = e.target.value; saveAll(); });
@@ -2401,15 +2535,19 @@
      harvest. Forget about it and it gets thirsty, then shrinks.
      ============================================================ */
 
+  const DIRT = ".:.:.:.:.";
   const PLANT_ART = [
-    ["         ", "         ", "         ", "    .    ", "~~~~~~~~~"],                                  // 0 seed
-    ["         ", "         ", "    ,    ", "    |    ", "~~~~|~~~~"],                                  // 1 sprout
-    ["         ", "   \\ /   ", "    |    ", "   \\|    ", "~~~~|~~~~"],                                 // 2 seedling
-    ["    o    ", "   \\|/   ", "    |    ", "   \\|/   ", "~~~~|~~~~"],                                 // 3 bud
-    ["   .-.   ", "  ( @ )  ", "   '|'   ", "   \\|/   ", "~~~~|~~~~"],                                 // 4 flower
-    [" .-'-'-. ", "(  (@)  )", " '-.|.-' ", "  \\\\|//  ", "~~~~|~~~~"],                               // 5 ready to harvest
-    ["  @ @ @  ", "   \\|/   ", "   _|_   ", "  |   |  ", "  |___|  "]                                  // 6 harvested
+    ["         ", "         ", "         ", "         ", "~~~~~~~~~", ".:.:o:.:."],              // 0 seed
+    ["         ", "         ", "    ,    ", "    |    ", "~~~~|~~~~", DIRT],                     // 1 sprout
+    ["         ", "   \\ /   ", "    |    ", "   \\|    ", "~~~~|~~~~", DIRT],                  // 2 seedling
+    ["    o    ", "   \\|/   ", "    |    ", "   \\|/   ", "~~~~|~~~~", DIRT],                  // 3 bud
+    ["   .-.   ", "  ( @ )  ", "   '|'   ", "   \\|/   ", "~~~~|~~~~", DIRT],                  // 4 flower
+    [" .-'-'-. ", "(  (@)  )", " '-.|.-' ", "  \\\\|//  ", "~~~~|~~~~", DIRT],              // 5 ready to harvest
+    ["  @ @ @  ", "   \\|/   ", "   _|_   ", "  |   |  ", "  |___|  ", "         "]             // 6 harvested
   ];
+  // every flower gets its own colors (picked from the idea, so they stay the same)
+  const PETALS = ["#e86fa0", "#f49ac1", "#f2c230", "#ef8a5a", "#b98ee6", "#ff6f91", "#f6d55c", "#e85d75"];
+  const PLANT_COLORS = { g: "#6aa84f", s: "#4e8f3a", d: "#8b5e3c", e: "#5a3a1e", v: "#b5714a" };
   const PLANT_NAMES = ["seed", "sprout", "seedling", "bud", "flower", "ready to harvest", "harvested"];
 
   function plantOf(i) {
@@ -2427,8 +2565,23 @@
   }
 
   function plantHTML(i, size = "") {
-    const pl = plantOf(i);
-    return `<pre class="rm-plant s${pl.stage}${pl.thirsty ? " thirsty" : ""} ${size}" aria-label="${PLANT_NAMES[pl.stage]}">${PLANT_ART[pl.stage].map(esc).join("\n")}</pre>`;
+    const pl = plantOf(i), st = pl.stage;
+    let h = 0; for (const ch of String(i.id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    const petal = PETALS[h % PETALS.length], yellowish = /f2c230|f6d55c/.test(petal);
+    const center = yellowish ? "#c0587e" : "#f2c230";
+    let flowerN = 0;
+    const kind = (li, ch) => {
+      if (ch === " ") return "";
+      if (st === 6) return li === 0 && ch === "@" ? PETALS[(h + flowerN++ * 3) % PETALS.length] : li === 1 || (li === 2 && ch === "|") ? PLANT_COLORS.s : PLANT_COLORS.v;
+      if (li === 5) return ch === "o" ? PLANT_COLORS.e : PLANT_COLORS.d;
+      if (li === 4) return ch === "~" ? PLANT_COLORS.g : PLANT_COLORS.s;
+      if (ch === "@") return center;
+      if (st === 3 && li === 0) return petal;
+      if (st >= 4 && li <= 2 && !"|\\/".includes(ch)) return petal;
+      return PLANT_COLORS.s;
+    };
+    const art = PLANT_ART[st].map((line, li) => [...line].map((ch) => { const c = kind(li, ch); return c ? `<b style="color:${c}">${esc(ch)}</b>` : " "; }).join("")).join("\n");
+    return `<pre class="rm-plant s${st}${pl.thirsty ? " thirsty" : ""} ${size}" aria-label="${PLANT_NAMES[st]}">${art}</pre>`;
   }
 
   function plantLine(i) {

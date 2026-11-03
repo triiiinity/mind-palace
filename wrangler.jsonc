@@ -4,6 +4,9 @@
   // worker.js answers /api/followers; everything else is the files in this folder
   "main": "worker.js",
   "assets": { "directory": "./", "binding": "ASSETS" },
-  // every monday morning: renew the instagram keys (only works once IG_KV is connected)
+  // the site's storage space: rooms saved under a save code + the instagram keys.
+  // Cloudflare creates it by itself on the first deploy (no id needed)
+  "kv_namespaces": [{ "binding": "KV" }],
+  // every monday morning: renew the instagram keys 
   "triggers": { "crons": ["17 13 * * 1"] }
 }

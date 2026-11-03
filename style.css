@@ -967,3 +967,10 @@ body { background: transparent; }
   25%  { opacity: 1; }
   100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(45deg); }
 }
+
+/* the menu: step names only; hover (or tap) a step and its pages drop down */
+.menu-label { text-align: left; color: var(--text); }
+.menu-step.here .menu-label { color: var(--muted); }
+.menu-pages { display: none; flex-direction: column; gap: 3px; padding: 3px 0 2px; }
+.menu-step:hover .menu-pages, .menu-step.open .menu-pages, .menu-step.here .menu-pages { display: flex; animation: fade-in .2s ease; }
+#site-header nav.menu { gap: 10px; }

@@ -4,6 +4,8 @@
 
      /api/followers   the follower counts of your Instagram accounts,
                       read with Instagram's official API
+     /api/room/CODE   a room saved online under its save code
+                      (GET opens it, PUT saves it)
 
    The keys (access tokens) live in Cloudflare as secrets, never in
    these files. Setup steps: INSTAGRAM-SETUP.md.
@@ -21,27 +23,28 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/api/followers") return followers(env);
+    if (url.pathname.startsWith("/api/room/")) return room(request, env, decodeURIComponent(url.pathname.slice(10)));
     return env.ASSETS.fetch(request);           // every other address: the site's files
   },
 
   // once a week: renew each token so it doesn't run out after 60 days
-  // (only kept if a KV storage space called IG_KV is connected; see INSTAGRAM-SETUP.md)
+  // (kept in the site's storage space, KV)
   async scheduled(event, env) {
-    if (!env.IG_KV) return;
+    if (!env.KV) return;
     for (const a of ACCOUNTS) {
       const token = await tokenFor(a, env);
       if (!token) continue;
       try {
         const r = await fetch(`${API}/refresh_access_token?grant_type=ig_refresh_token&access_token=${encodeURIComponent(token)}`);
         const j = await r.json();
-        if (j.access_token) await env.IG_KV.put(a.secret, j.access_token);
+        if (j.access_token) await env.KV.put("ig:" + a.secret, j.access_token);
       } catch (e) { /* try again next week */ }
     }
   }
 };
 
 async function tokenFor(a, env) {
-  return (env.IG_KV && await env.IG_KV.get(a.secret)) || env[a.secret] || "";
+  return (env.KV && await env.KV.get("ig:" + a.secret)) || env[a.secret] || "";
 }
 
 async function followers(env) {
@@ -60,4 +63,31 @@ async function followers(env) {
   return new Response(JSON.stringify({ at: new Date().toISOString(), accounts: out }), {
     headers: { "content-type": "application/json", "cache-control": "no-store", "x-robots-tag": "noindex" }
   });
+}
+
+/* ---------- rooms saved under a code ----------
+   The code (like trinity-k3x9qa) is the only key, so it has a random part
+   nobody could guess. Rooms are kept in the site's storage space (KV),
+   which Cloudflare creates by itself the first time the site deploys. */
+
+const CODE = /^[a-z0-9]{1,16}-[a-z0-9]{6,12}$/;
+const MAX = 20 * 1024 * 1024;     // 20 MB per room (pictures you upload make it bigger)
+
+async function room(request, env, code) {
+  const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store", "x-robots-tag": "noindex" } });
+  if (!CODE.test(code)) return json({ error: "that isn't a save code" }, 400);
+  if (!env.KV) return json({ error: "online saving isn't switched on" }, 503);
+  const key = "room:" + code;
+  if (request.method === "GET") {
+    const data = await env.KV.get(key);
+    return data ? new Response(data, { headers: { "content-type": "application/json", "cache-control": "no-store" } }) : json({ error: "no room with that code" }, 404);
+  }
+  if (request.method === "PUT") {
+    const text = await request.text();
+    if (text.length > MAX) return json({ error: "too big" }, 413);
+    try { if (!JSON.parse(text).room) throw 0; } catch (e) { return json({ error: "not a room" }, 400); }
+    await env.KV.put(key, text);
+    return json({ saved: new Date().toISOString() });
+  }
+  return json({ error: "no" }, 405);
 }
