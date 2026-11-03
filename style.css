@@ -951,8 +951,8 @@ body { background: transparent; }
   background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
   background-size: var(--grid, 28px) var(--grid, 28px);
   opacity: 0; transition: opacity 1.2s ease;
-  -webkit-mask-image: radial-gradient(circle at var(--gx, 50%) var(--gy, 50%), #000 var(--gr, 0px), transparent calc(var(--gr, 0px) + 80px));
-          mask-image: radial-gradient(circle at var(--gx, 50%) var(--gy, 50%), #000 var(--gr, 0px), transparent calc(var(--gr, 0px) + 80px));
+  -webkit-mask-image: radial-gradient(circle at var(--gx, 50%) var(--gy, 50%), #000 calc(var(--gr, 0px) * 0.55), transparent var(--gr, 0px));
+          mask-image: radial-gradient(circle at var(--gx, 50%) var(--gy, 50%), #000 calc(var(--gr, 0px) * 0.55), transparent var(--gr, 0px));
 }
 .grid-layer.on { opacity: 1; transition: opacity .2s ease; }
 

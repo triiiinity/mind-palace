@@ -5,3 +5,5 @@ wrangler.jsonc
 README.md
 CHECKLIST.md
 node_modules
+worker.js
+INSTAGRAM-SETUP.md

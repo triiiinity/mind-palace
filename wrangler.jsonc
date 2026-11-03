@@ -1,5 +1,9 @@
 {
   "name": "mind-palace",
   "compatibility_date": "2026-10-01",
-  "assets": { "directory": "./" }
+  // worker.js answers /api/followers; everything else is the files in this folder
+  "main": "worker.js",
+  "assets": { "directory": "./", "binding": "ASSETS" },
+  // every monday morning: renew the instagram keys (only works once IG_KV is connected)
+  "triggers": { "crons": ["17 13 * * 1"] }
 }

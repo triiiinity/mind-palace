@@ -28,10 +28,12 @@ const MENU = [
 const PLUS_CURSOR = true;
 const PLUS_SHADES = ["#4a4a4a", "#666666", "#808080", "#999999", "#b3b3b3", "#cccccc"];
 
-/* THE GRID: click any empty white space and the grid shows through.
-   GRID_SIZE = size of each square in pixels; GRID_STAYS = seconds it stays. */
+/* THE GRID: click any empty white space and a small circle of grid shows through.
+   GRID_SIZE = size of each square, GRID_RADIUS = size of the circle (pixels),
+   GRID_STAYS = seconds before it fades. */
 const GRID_SIZE = 28;
-const GRID_STAYS = 4;
+const GRID_RADIUS = 90;
+const GRID_STAYS = 1.6;
 
 /* ---------- YOUR WORKS (from the portfolio) ---------- */
 
@@ -82,13 +84,13 @@ function startGrid() {
   document.addEventListener("click", (e) => {
     if (e.target.closest && e.target.closest(BUSY)) return;
     if (window.getSelection && String(window.getSelection())) return;      // selecting text isn't a click on the white
-    const x = e.clientX, y = e.clientY, far = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+    const x = e.clientX, y = e.clientY, far = GRID_RADIUS;
     layer.style.setProperty("--gx", x + "px"); layer.style.setProperty("--gy", y + "px");
     layer.classList.add("on");
     cancelAnimationFrame(raf);
     const t0 = performance.now();
-    const grow = (t) => {           // the grid opens out from where you clicked
-      const k = Math.min(1, (t - t0) / 700), r = far * (1 - Math.pow(1 - k, 3));
+    const grow = (t) => {           // a little circle of grid opens around where you clicked
+      const k = Math.min(1, (t - t0) / 350), r = far * (1 - Math.pow(1 - k, 3));
       layer.style.setProperty("--gr", r + "px");
       if (k < 1) raf = requestAnimationFrame(grow);
     };

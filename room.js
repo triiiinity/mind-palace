@@ -2346,7 +2346,7 @@
           <div class="rm-states" id="rm-artist"><button type="button" data-a="1" class="${share.artist ? "on" : ""}">I am an artist</button><button type="button" data-a="0" class="${share.artist ? "" : "on"}">I am not (yet)</button></div>
           ${share.artist ? `<p class="rm-row"><input id="rm-ig" value="${esc(share.instagram)}" placeholder="instagram handle" size="18">${share.instagram ? ` <a href="https://instagram.com/${esc(share.instagram.replace(/^@/, ""))}" target="_blank" rel="noopener">↗</a>` : ""}</p>` : ""}
 
-          <h4 class="rm-gap">right now</h4>
+          <h4 class="rm-gap rm-secret" id="rm-rightnow">right now</h4>
           <p class="rm-why">what life is feeding the art: now listening, now watching, now reading, now loving…</p>
           <div id="rm-now">${share.now.map((n, k) => `<div class="rm-nowrow" data-k="${k}"><input data-f="label" value="${esc(n.label)}" size="12"><input data-f="title" value="${esc(n.title)}" placeholder="what" size="16"><input data-f="by" value="${esc(n.by || "")}" placeholder="by" size="12"><button type="button" class="rm-del" data-x="${k}">×</button></div>`).join("")}</div>
           <button type="button" class="rm-why" id="rm-nowadd">+ another</button>
@@ -2364,6 +2364,8 @@
         </div>
       </div>`;
     drawMyWork($("rm-mywork"));
+    // the secret: click "right now" three times for your instagram follower counts
+    $("rm-rightnow").addEventListener("click", (e) => { if (e.detail === 3) openFollowers(); });
     $("rm-rname").addEventListener("input", (e) => { share.roomName = e.target.value; saveAll(); });
     v.querySelectorAll("#rm-artist button").forEach((b) => b.addEventListener("click", () => { share.artist = b.dataset.a === "1"; saveAll(); showShare(); }));
     if ($("rm-ig")) $("rm-ig").addEventListener("change", (e) => { share.instagram = e.target.value.trim(); saveAll(); showShare(); });
@@ -2630,6 +2632,44 @@
     }
   }
 
+
+  /* ============================================================
+     SECRET: instagram follower counts (profile → triple-click
+     "right now"). Read live by worker.js with Instagram's
+     official API; setup in INSTAGRAM-SETUP.md.
+     ============================================================ */
+
+  const IG_HANDLES = ["projectgallery", "triiinity.lester"];
+
+  async function openFollowers() {
+    let pop = $("rm-igpop");
+    if (!pop) {
+      pop = document.createElement("div");
+      pop.id = "rm-igpop"; pop.className = "rm-igpop";
+      document.body.appendChild(pop);
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape") pop.hidden = true; });
+    }
+    const draw = (rows, note) => {
+      pop.innerHTML = `<button type="button" class="rm-x" aria-label="close">×</button>
+        ${rows.map((a) => `<div class="rm-igrow"><a href="https://instagram.com/${esc(a.handle)}" target="_blank" rel="noopener">@${esc(a.handle)}</a>
+          <b>${a.followers != null ? Number(a.followers).toLocaleString("en-US") : a.loading ? "…" : "–"}</b>${a.followers != null ? `<span class="rm-why">followers</span>` : a.error ? `<span class="rm-why">${esc(a.error)}</span>` : ""}</div>`).join("")}
+        <p class="rm-why">${note}</p>
+        <button type="button" class="rm-why" id="rm-igagain">refresh</button>`;
+      pop.hidden = false;
+      pop.querySelector(".rm-x").addEventListener("click", () => { pop.hidden = true; });
+      pop.querySelector("#rm-igagain").addEventListener("click", openFollowers);
+    };
+    draw(IG_HANDLES.map((h) => ({ handle: h, loading: true })), "checking…");
+    try {
+      const r = await fetch("/api/followers", { cache: "no-store" });
+      if (!r.ok) throw new Error(r.status);
+      const j = await r.json();
+      const t = new Date(j.at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).toLowerCase();
+      draw(j.accounts, j.accounts.some((a) => a.error) ? `as of ${t} · see INSTAGRAM-SETUP.md for the one-time setup` : `live, as of ${t}`);
+    } catch (e) {
+      draw(IG_HANDLES.map((h) => ({ handle: h, error: "not set up yet" })), "the follower counter works once the site is on Cloudflare with your instagram keys (INSTAGRAM-SETUP.md).");
+    }
+  }
 
   gardenReady = true;
   route();

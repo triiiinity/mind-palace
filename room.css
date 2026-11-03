@@ -670,3 +670,13 @@ body.rm-noscroll { overflow: hidden; }
 .rm-cpop .rm-swatches.lib .rm-swatch i { width: 26px; height: 26px; }
 .rm-cpop .rm-libitem .rm-del { display: none; }
 .rm-plant.tiny { font-size: 7px; }
+
+/* secret: instagram follower counts */
+.rm-secret { user-select: none; cursor: default; }
+.rm-igpop { position: fixed; z-index: 95; left: 50%; top: 30%; transform: translateX(-50%); width: 300px; background: #fff; border: 1px solid var(--line); padding: 18px 18px 12px; animation: fade-in .2s ease; }
+.rm-igpop[hidden] { display: none; }
+.rm-igpop .rm-x { position: absolute; right: 8px; top: 4px; }
+.rm-igrow { display: grid; grid-template-columns: 1fr auto; column-gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.rm-igrow b { font-size: 18px; font-weight: 400; color: var(--text); text-align: right; }
+.rm-igrow .rm-why { grid-column: 1 / -1; text-align: right; font-size: 10px; }
+.rm-igpop p { margin: 8px 0 2px; font-size: 10px; }
