@@ -18,10 +18,10 @@ const PORTFOLIO = "https://trinitylester.trinityl-lester.workers.dev";
 /* the menu on the left: the four steps, in order. Each link is a page of
    the room (the part after # in the address). Add or rename pages here. */
 const MENU = [
-  { step: "1 remembering", pages: [["bin", "inspiration list"], ["pure", "pure art"], ["library", "library"], ["nature", "pure images"]] },
-  { step: "2 collecting", pages: [["collection", "image feed"], ["picker", "color picker"], ["split", "splitscreen"], ["obliterate", "obliterate"]] },
-  { step: "3 creating", pages: [["bank", "color bank"], ["ideas", "idea board"], ["order", "order of operations"], ["progress", "progress tracker"]] },
-  { step: "4 posting", pages: [["share", "profile"], ["notes", "notes"]] }
+  { step: "1 remembering", pages: [["bin", "inspiration list"], ["images", "images"], ["library", "library"]] },
+  { step: "2 collecting", pages: [["picker", "color picker"], ["split", "splitscreen"]] },
+  { step: "3 creating", pages: [["bank", "color bank"], ["ideas", "idea board"], ["order", "order of operations"]] },
+  { step: "4 posting", pages: [["share", "profile"]] }
 ];
 
 /* THE CURSOR: gray plus signs falling from the mouse. false = off. */
@@ -80,7 +80,7 @@ function renderHeader() {
 // underline the page you're on
 function markMenu() {
   const h = decodeURIComponent(location.hash.slice(1));
-  const page = h.startsWith("artist/") || h === "artists" ? "pure" : h.startsWith("read/") ? "library" : h;
+  const page = h.startsWith("artist/") ? "images" : h.startsWith("read/") ? "library" : h === "visit" ? "share" : h;
   document.querySelectorAll("#site-header [data-page]").forEach((a) => a.classList.toggle("current", a.dataset.page === page));
   // the step you're in stays a little open so you can see where you are
   document.querySelectorAll("#site-header .menu-step").forEach((st) => {

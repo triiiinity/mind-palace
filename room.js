@@ -267,16 +267,34 @@
 
   /* the four steps. The menu itself is in the left column (base.js); these feed the home page. */
   const STEPS = [
-    { n: 1, label: "remembering", line: "everything you carry around", pages: [["bin", "inspiration list"], ["pure", "pure art"], ["library", "library"], ["nature", "pure images"]] },
-    { n: 2, label: "collecting", line: "gathering what you remember", pages: [["collection", "image feed"], ["picker", "color picker"], ["split", "splitscreen"], ["obliterate", "obliterate"]] },
-    { n: 3, label: "creating", line: "now you should have an idea", pages: [["bank", "color bank"], ["ideas", "idea board"], ["order", "order of operations"], ["progress", "progress tracker"]] },
-    { n: 4, label: "posting", line: "what did you make", pages: [["share", "profile"], ["notes", "notes"]] }
+    { n: 1, label: "remembering", line: "everything you carry around", pages: [["bin", "inspiration list"], ["images", "images"], ["library", "library"]] },
+    { n: 2, label: "collecting", line: "gathering what you remember", pages: [["picker", "color picker"], ["split", "splitscreen"]] },
+    { n: 3, label: "creating", line: "now you should have an idea", pages: [["bank", "color bank"], ["ideas", "idea board"], ["order", "order of operations"]] },
+    { n: 4, label: "posting", line: "your studio, as it goes", pages: [["share", "profile"]] }
   ];
-  const PAGES = STEPS.flatMap((st) => st.pages.map(([k]) => k)).concat("home");
+  const PAGES = STEPS.flatMap((st) => st.pages.map(([k]) => k)).concat("home", "visit");
+  // pages that were folded into others, so old links still land somewhere
+  const MOVED = { pure: "images", nature: "images", artists: "images", collection: "images", obliterate: "split", progress: "order", notes: "share" };
+  // the way through, start to finish (the little "next" line at the bottom of each page)
+  const TRAIL = ["bin", "images", "picker", "split", "bank", "ideas", "order", "share"];
+  const TRAIL_WHY = { bin: "write down what inspires you", images: "see real art and real pictures of it", picker: "pick the colors out", split: "put art and the world side by side",
+    bank: "your colors, all together", ideas: "plant an idea", order: "list the steps; each one waters it", share: "post what you made" };
+  const LABEL = Object.fromEntries(STEPS.flatMap((st) => st.pages));
 
   root.innerHTML = `
     <section id="rm-view"></section>
+    <nav class="rm-trail" id="rm-trail" aria-label="next step"></nav>
     <aside class="rm-panel" id="rm-panel" hidden></aside>`;
+
+  function drawTrail(page) {
+    const t = $("rm-trail"), k = TRAIL.indexOf(page);
+    if (!t) return;
+    if (k < 0 || page === "bank") { t.innerHTML = ""; return; }
+    const prev = TRAIL[k - 1], next = TRAIL[k + 1];
+    t.innerHTML = `<span class="rm-trailsteps">${TRAIL.map((p, i) => `<a href="#${p}" class="${i < k ? "past" : i === k ? "here" : ""}" title="${esc(LABEL[p])}"></a>`).join("")}</span>`
+      + (prev ? `<a href="#${prev}" class="rm-why">← ${esc(LABEL[prev])}</a>` : "")
+      + (next ? `<a href="#${next}" class="rm-trailnext">next: ${esc(LABEL[next])} <span class="rm-why">${esc(TRAIL_WHY[next])}</span> →</a>` : `<span class="rm-why">that's the whole way through. start again with a new word →</span> <a href="#bin">inspiration list</a>`);
+  }
 
   /* your 2026 work: a strip of small pictures across the top of every room page.
      Newest first (the last lines in works.js). Click one to see it big. */
@@ -300,16 +318,17 @@
     const h = decodeURIComponent(location.hash.slice(1));
     const isArtist = h.startsWith("artist/");
     const isBook = h.startsWith("read/");
-    const page = isArtist ? "pure" : isBook ? "library" : h === "artists" ? "pure" : PAGES.includes(h) ? h : "home";
+    if (MOVED[h]) { location.replace("#" + MOVED[h]); return; }
+    const page = isArtist ? "images" : isBook ? "library" : PAGES.includes(h) ? h : "home";
     closePanel();
     root.classList.toggle("on-web", page === "web");
     root.classList.toggle("on-bank", page === "bank");
     root.dataset.page = page;
     if (isArtist) showArtist(h.slice(7));
     else if (isBook) showBook(h.slice(5));
-    else ({ home: showHome, pure: showPure, library: showLibrary, picker: showPicker, obliterate: showObliterate, bank: showBank, order: showOrder, share: showShare,
-            collection: showCollection, nature: showNature, split: showSplit, bin: showBin, ideas: showIdeas,
-            progress: showProgress, notes: showNotes })[page]();
+    else ({ home: showHome, images: showImages, library: showLibrary, picker: showPicker, bank: showBank, order: showOrder, share: showShare,
+            split: showSplit, bin: showBin, ideas: showIdeas, visit: showVisit })[page]();
+    drawTrail(page);
     closeMachine();
     drawGarden();
     window.scrollTo(0, 0);
@@ -330,7 +349,7 @@
       list.hidden = !items.length;
       list.innerHTML = items.map((s, i) => `<li class="${i === active ? "on" : ""}" data-i="${i}"><b>${esc(s.label)}</b> <span>${esc(s.desc)}</span></li>`).join("");
     };
-    const pick = (name) => { input.value = ""; items = []; draw(); if (name.trim()) onPick(name.trim()); };
+    const pick = (name, item) => { input.value = ""; items = []; draw(); if (name.trim()) onPick(name.trim(), item || null); };
     input.addEventListener("input", () => {
       clearTimeout(timer);
       const q = input.value.trim();
@@ -343,8 +362,8 @@
       if (e.key === "ArrowUp") { active = (active - 1 + items.length) % items.length; draw(); e.preventDefault(); }
       if (e.key === "Escape") { items = []; draw(); }
     });
-    list.addEventListener("mousedown", (e) => { const li = e.target.closest("li"); if (li) { e.preventDefault(); pick(items[+li.dataset.i].label); } });
-    form.addEventListener("submit", (e) => { e.preventDefault(); pick(active >= 0 ? items[active].label : input.value); });
+    list.addEventListener("mousedown", (e) => { const li = e.target.closest("li"); if (li) { e.preventDefault(); pick(items[+li.dataset.i].label, items[+li.dataset.i]); } });
+    form.addEventListener("submit", (e) => { e.preventDefault(); pick(active >= 0 ? items[active].label : input.value, active >= 0 ? items[active] : null); });
     return input;
   }
 
@@ -372,7 +391,7 @@
     v.innerHTML = `
       <div class="rm-ahead">
         <div>
-          <p class="rm-crumbs"><a href="#pure">pure art</a>${others.length ? " · " + others.slice(-6).map((o) => `<a href="${artistHref(o.name)}">${esc(o.name)}</a>`).join(" · ") : ""}</p>
+          <p class="rm-crumbs"><a href="#images">images</a>${others.length ? " · " + others.slice(-6).map((o) => `<a href="${artistHref(o.name)}">${esc(o.name)}</a>`).join(" · ") : ""}</p>
           <h1>${esc(name)}</h1>
           <p class="rm-why" id="rm-adesc"></p>
         </div>
@@ -407,7 +426,7 @@
       $("rm-anote").addEventListener("input", (e) => { m.note = e.target.value; saveAll(); });
       $("rm-remove").addEventListener("click", () => {
         if (!confirmTwice($("rm-remove"), "click again to remove")) return;
-        mine = mine.filter((x) => x !== m); saveAll(); location.hash = "#pure";
+        mine = mine.filter((x) => x !== m); saveAll(); location.hash = "#images";
       });
     } else $("rm-addme").addEventListener("click", () => { addArtist(name); showArtist(name); });
     $("rm-toweb").addEventListener("click", () => {
@@ -495,7 +514,7 @@
           collection = collection.filter((x) => x.id !== w.id);
           ideas.forEach((i) => { i.refs = i.refs.filter((r) => r !== w.id); });
           saveAll(); markTile(w.id, false);
-          if (location.hash === "#collection") showCollection();
+          if (location.hash === "#images" && imgView === "saved") showImages();
         } else {
           collection = collection.concat({ ...w, tags: [], note: "", saved: today() });
           saveAll(); markTile(w.id, true);
@@ -1260,54 +1279,6 @@
     return list;
   }
 
-  async function showNature(fresh) {
-    const v = $("rm-view");
-    const saved = collection.filter((w) => w.kind === "nature").slice().reverse();
-    v.innerHTML = `
-      <div class="rm-center">
-        <div id="rm-natbar"></div>
-        <p class="rm-chips rm-tagchips">${natureTags.map((n, i) => `<span class="${n.on ? "on" : ""}"><button type="button" data-i="${i}">${esc(n.t)}</button><button type="button" class="rm-del" data-x="${i}" title="remove">×</button></span>`).join("")}</p>
-      </div>
-      <p class="rm-wide">why: image search is filling up with AI-generated pictures and recent stock. everything here is a real photograph by a named person: the best-rated photographs on Wikimedia Commons, each one credited. click a tag to turn it on or off. found a real one somewhere else (eBay, an old photo site, a scan)? paste it below.</p>
-      <div class="rm-savedhead"><h4>saved${saved.length ? ` (${saved.length})` : ""}</h4>
-        <form id="rm-realadd" class="rm-row"><input name="src" placeholder="paste a real photo's image link" size="30" required><input name="title" placeholder="what is it" size="14"><button type="submit">+ save</button></form></div>
-      ${saved.length ? `<div class="rm-grid" id="rm-natsaved">${saved.map(tileHTML).join("")}</div>` : `<p class="rm-why">nothing saved yet: press + on any photograph.</p>`}
-      <h4 class="rm-gap">more from the world <button type="button" class="rm-why" id="rm-shuffle">shuffle</button> <span class="rm-status" id="rm-natst">looking…</span></h4>
-      <div class="rm-grid big" id="rm-natgrid"><div class="rm-loading">${"<i></i>".repeat(12)}</div></div>`;
-
-    typingBar($("rm-natbar"), { placeholder: "add a nature tag (rocks, moss, glaciers…)", suggest: false, onPick: (t) => {
-      if (!natureTags.some((n) => plain(n.t) === plain(t))) natureTags.push({ t: t.toLowerCase(), on: true });
-      saveAll(); showNature();
-    } });
-    v.querySelectorAll(".rm-tagchips [data-i]").forEach((b) => b.addEventListener("click", () => { const n = natureTags[+b.dataset.i]; n.on = !n.on; saveAll(); showNature(); }));
-    v.querySelectorAll(".rm-tagchips [data-x]").forEach((b) => b.addEventListener("click", () => { natureTags.splice(+b.dataset.x, 1); saveAll(); showNature(); }));
-    if (saved.length) wireTiles($("rm-natsaved"), saved);
-    $("rm-realadd").addEventListener("submit", (e) => {
-      e.preventDefault();
-      const f = e.target, src = f.src.value.trim();
-      let host = ""; try { host = new URL(src).hostname.replace(/^www\./, ""); } catch (err) { return; }
-      collection.push({ id: "ln-" + uid(), kind: "nature", museum: host, title: f.title.value.trim() || "photo from " + host, artist: "found on " + host, thumb: src, img: src, url: src, tags: [], note: "", saved: today() });
-      saveAll(); showNature();
-    });
-    $("rm-shuffle").addEventListener("click", () => {
-      natureTags.forEach((n) => store.set("c:nat:" + plain(n.t), null));   // forget, so new pictures come in
-      showNature(true);
-    });
-
-    const on = natureTags.filter((n) => n.on);
-    if (!on.length) { $("rm-natgrid").innerHTML = `<p class="rm-empty">turn on a tag above.</p>`; $("rm-natst").textContent = ""; return; }
-    const lists = await Promise.all(on.map((n) => natureFor(n.t)));
-    const grid = $("rm-natgrid");
-    if (!grid) return;
-    // mix the tags together, a few of each at a time
-    const pools = lists.map((l) => shuffle(l));
-    const mixed = [];
-    while (pools.some((p) => p.length) && mixed.length < 60) pools.forEach((p) => { if (p.length) mixed.push(p.pop()); });
-    grid.innerHTML = mixed.length ? mixed.map(tileHTML).join("") : `<p class="rm-empty">nothing came back. try another word, or check your connection.</p>`;
-    wireTiles(grid, mixed);
-    $("rm-natst").textContent = `${mixed.length} photographs · ` + on.map((n, i) => `${n.t} ${lists[i].length}`).join(" · ");
-  }
-
   /* ============================================================
      3 · SPLIT SCREEN: art you saved on the left, nature on the
      right. Click a picture to put it on its side's table, then
@@ -1324,10 +1295,15 @@
   function showSplit() {
     const v = $("rm-view");
     const art = collection.filter((w) => w.kind !== "nature" && w.kind !== "wreck" && (w.img || w.thumb));
-    const nat = collection.filter((w) => w.kind === "nature");
+    const nat = collection.filter((w) => w.kind === "nature" || w.kind === "wreck");
     const leftList = splitLeft === "mine" ? myWorkAsItems() : art;
     v.innerHTML = `
-      <p class="rm-intro">art on the left, the world on the right. roll the dice on each side for a new pair; click on a picture to pick a color.</p>
+      <p class="rm-intro">art on the left, the world on the right. roll the dice on each side for a new pair. pick colors, or change a photograph: pixelate it, blur it, burn it. (the tools work on real photographs and your own work; other artists' work stays as it is.)</p>
+      <div class="rm-mbtns rm-tools" id="rm-tools">${SPLIT_TOOLS.map(([k, l]) => `<button type="button" data-tool="${k}" class="${k === splitTool ? "on" : ""}">${l}</button>`).join("")}
+        <span>size <input type="range" id="rm-wsize" min="6" max="120" value="${store.get("wsize", 40)}"></span>
+        <button type="button" id="rm-wundo">undo</button><button type="button" id="rm-wreset">start over</button>
+        <button type="button" id="rm-wsave">keep this version</button><button type="button" id="rm-wdl">download</button>
+        <span class="rm-status" id="rm-wst"></span></div>
       <div class="rm-split">
         <div class="rm-side">
           <h4><button type="button" class="${splitLeft === "art" ? "on" : ""}" data-left="art">art I saved (${art.length})</button> · <button type="button" class="${splitLeft === "mine" ? "on" : ""}" data-left="mine">my work</button></h4>
@@ -1348,9 +1324,80 @@
 
     v.querySelectorAll("[data-left]").forEach((b) => b.addEventListener("click", () => { splitLeft = b.dataset.left; showSplit(); }));
     setupSide("L", leftList, splitLeft === "mine" ? "mine" : "art",
-      splitLeft === "mine" ? "nothing tagged " + (R.MY_WORK_TAG || "2026") + " in works.js yet." : `nothing saved yet: open any work in <a href="#pure">1 · pure art</a> and press save.`);
-    setupSide("R", nat, "nature", `nothing saved yet: save photographs in <a href="#nature">1 · real image search</a>.`);
+      splitLeft === "mine" ? "nothing tagged " + (R.MY_WORK_TAG || "2026") + " in works.js yet." : `nothing saved yet: press + on art in <a href="#images">1 · images</a>.`);
+    setupSide("R", nat, "nature", `nothing saved yet: press + on photographs in <a href="#images">1 · images</a>.`);
     drawRecent();
+
+    // the tool bar works on whichever picture you touched last
+    const st = $("rm-wst");
+    v.querySelectorAll("[data-tool]").forEach((b) => b.addEventListener("click", () => {
+      splitTool = b.dataset.tool; store.set("splitTool", splitTool);
+      v.querySelectorAll("[data-tool]").forEach((x) => x.classList.toggle("on", x === b));
+      v.classList.toggle("rm-wrecking", splitTool !== "pick");
+    }));
+    v.classList.toggle("rm-wrecking", splitTool !== "pick");
+    $("rm-wsize").addEventListener("change", (e) => store.set("wsize", +e.target.value));
+    const last = () => lastStage && lastStage.isConnected && lastStage._wreck;
+    $("rm-wundo").addEventListener("click", () => { const k = last(); if (k && k.undo.length) k.ctx.putImageData(k.undo.pop(), 0, 0); });
+    $("rm-wreset").addEventListener("click", () => { const k = last(); if (k) loadStage(lastStage, k.w, k.side, { tools: true }); });
+    $("rm-wdl").addEventListener("click", () => {
+      const k = last(); if (!k || !k.changed) { st.textContent = "change a photograph first"; return; }
+      const a = document.createElement("a"); a.href = k.cv.toDataURL("image/png"); a.download = "changed-" + today() + ".png"; a.click();
+    });
+    $("rm-wsave").addEventListener("click", () => {
+      const k = last(); if (!k || !k.changed) { st.textContent = "change a photograph first"; return; }
+      const sc = Math.min(1, 700 / Math.max(k.cv.width, k.cv.height)), c = document.createElement("canvas");
+      c.width = Math.round(k.cv.width * sc); c.height = Math.round(k.cv.height * sc);
+      c.getContext("2d").drawImage(k.cv, 0, 0, c.width, c.height);
+      const data = c.toDataURL("image/jpeg", 0.8);
+      collection.push({ id: "wr-" + uid(), kind: "wreck", museum: "+", title: "changed: " + (k.w.title || "untitled"), artist: "me", thumb: data, img: data, url: "", tags: ["changed"], note: "", saved: today() });
+      saveAll(); st.textContent = "kept: it's with your saved pictures now";
+    });
+  }
+
+  /* the tools from obliterate, now in the split screen: pick a color (the default),
+     or pixelate, blur, burn, smear with water, pour, scratch. Only on real photographs
+     and your own work: never on someone else's art. */
+  const SPLIT_TOOLS = [["pick", "pick a color"], ["pixelate", "pixelate"], ["blur", "blur"], ["burn", "burn"], ["water", "smear with water"], ["pour", "pour (click)"], ["scratch", "scratch"]];
+  let splitTool = store.get("splitTool", "pick");
+  let lastStage = null;
+  const canChange = (side) => side === "nature" || side === "mine";
+
+  function wreckDab(k, tool, x, y, lx, ly) {
+    const { ctx, cv } = k, r = +(($("rm-wsize") || {}).value || 40) / 2;
+    const circle = () => { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.clip(); };
+    ctx.save();
+    if (tool === "pixelate") {
+      const b = Math.max(6, Math.round(r / 2.5));
+      const x0 = Math.floor((x - r) / b) * b, y0 = Math.floor((y - r) / b) * b;
+      for (let yy = y0; yy < y + r; yy += b) for (let xx = x0; xx < x + r; xx += b) {
+        if (xx < 0 || yy < 0 || xx >= cv.width || yy >= cv.height) continue;
+        const d = ctx.getImageData(xx, yy, Math.min(b, cv.width - xx), Math.min(b, cv.height - yy)).data;
+        let R2 = 0, G = 0, B = 0; const n = d.length / 4;
+        for (let i = 0; i < d.length; i += 4) { R2 += d[i]; G += d[i + 1]; B += d[i + 2]; }
+        ctx.fillStyle = `rgb(${R2 / n | 0},${G / n | 0},${B / n | 0})`; ctx.fillRect(xx, yy, b, b);
+      }
+    } else if (tool === "blur") {
+      circle(); ctx.filter = `blur(${Math.max(2, r / 6)}px)`; ctx.drawImage(cv, 0, 0);
+    } else if (tool === "burn") {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, "rgba(20,8,0,0.35)"); g.addColorStop(0.6, "rgba(90,40,5,0.18)"); g.addColorStop(1, "rgba(120,60,10,0)");
+      ctx.globalCompositeOperation = "multiply"; ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    } else if (tool === "water" && lx != null) {
+      circle(); ctx.globalAlpha = 0.55; ctx.drawImage(cv, lx - r, ly - r, r * 2, r * 2, x - r, y - r, r * 2, r * 2);
+      ctx.globalAlpha = 0.04; ctx.fillStyle = "#dfe9ee"; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    } else if (tool === "scratch") {
+      ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.lineWidth = Math.max(1, r / 14);
+      for (let q = 0; q < 3; q++) { ctx.beginPath(); ctx.moveTo(x + (Math.random() - 0.5) * r, y + (Math.random() - 0.5) * r); ctx.lineTo(x + (Math.random() - 0.5) * r * 2, y + (Math.random() - 0.5) * r * 2); ctx.stroke(); }
+    } else if (tool === "pour") {      // water runs down from where you click, dragging the picture with it
+      const streams = 3 + Math.floor(Math.random() * 4);
+      for (let q = 0; q < streams; q++) {
+        let sx = x + (Math.random() - 0.5) * r * 2, sy = y; const w = 3 + Math.random() * r / 3, len = cv.height * (0.15 + Math.random() * 0.5);
+        for (let j = 0; j < len && sy < cv.height; j += 2) { ctx.globalAlpha = 0.5; ctx.drawImage(cv, sx, sy, w, 3, sx, sy + 2, w, 3); sx += (Math.random() - 0.5) * 1.5; sy += 2; }
+      }
+    }
+    ctx.restore();
+    k.changed = true;
   }
 
   function setupSide(k, list, side, emptyMsg) {
@@ -1363,7 +1410,7 @@
     const show = (i) => {
       at = i;
       minis.querySelectorAll("button").forEach((b) => b.classList.toggle("on", +b.dataset.i === i));
-      loadStage(stage, list[i], side);
+      loadStage(stage, list[i], side, { tools: true });
     };
     const roll = () => show(list.length < 2 ? 0 : (at + 1 + Math.floor(Math.random() * (list.length - 1))) % list.length);
     minis.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => show(+b.dataset.i)));
@@ -1375,7 +1422,7 @@
   }
 
   // draw a picture on a canvas so its colors can be read
-  function loadStage(stage, w, side) {
+  function loadStage(stage, w, side, opts = {}) {
     stage.innerHTML = `<canvas></canvas><p class="rm-why rm-stagecap">${esc(w.title || "")}${w.artist ? " · " + esc(w.artist) : ""}</p>`;
     const cv = stage.querySelector("canvas"), ctx = cv.getContext("2d", { willReadFrequently: true });
     const img = new Image();
@@ -1414,7 +1461,27 @@
       loupe.innerHTML = `<i style="background:${hex}"></i>${hex}`;
     });
     cv.addEventListener("mouseleave", () => { loupe.hidden = true; });
+    // the split screen's tools: drag on a photograph to change it
+    if (opts.tools) {
+      const k = stage._wreck = { cv, ctx, w, side, undo: [], changed: false };
+      let down = false, lx = null, ly = null;
+      const at = (e) => { const r = cv.getBoundingClientRect(), p = e.touches ? e.touches[0] : e; return [(p.clientX - r.left) * cv.width / r.width, (p.clientY - r.top) * cv.height / r.height]; };
+      const start = (e) => {
+        lastStage = stage;
+        if (splitTool === "pick" || !readable) return;
+        e.preventDefault();
+        if (!canChange(side)) { const st = $("rm-wst"); if (st) st.textContent = "other artists' work stays as it is: try a photograph, or your own work"; return; }
+        k.undo.push(ctx.getImageData(0, 0, cv.width, cv.height)); if (k.undo.length > 12) k.undo.shift();
+        const [x, y] = at(e);
+        wreckDab(k, splitTool, x, y);
+        if (splitTool !== "pour") { down = true; lx = x; ly = y; }
+      };
+      const move = (e) => { if (!down) return; e.preventDefault(); const [x, y] = at(e); wreckDab(k, splitTool, x, y, lx, ly); lx = x; ly = y; };
+      cv.addEventListener("mousedown", start); cv.addEventListener("mousemove", move); window.addEventListener("mouseup", () => { down = false; });
+      cv.addEventListener("touchstart", start, { passive: false }); cv.addEventListener("touchmove", move, { passive: false }); cv.addEventListener("touchend", () => { down = false; });
+    }
     cv.addEventListener("click", (e) => {
+      if (opts.tools && splitTool !== "pick") return;
       if (!readable) return;
       const hex = colorAt(e);
       colors.push({ id: uid(), hex, side, from: { title: w.title || "", artist: w.artist || "", thumb: w.thumb || "" }, t: today() });
@@ -1658,8 +1725,7 @@
       collection = collection.filter((x) => x.id !== w.id);
       ideas.forEach((i) => { i.refs = i.refs.filter((r) => r !== w.id); });
       saveAll(); markTile(w.id, false); closePanel();
-      if (location.hash === "#collection") showCollection();
-      if (location.hash === "#nature") showNature();
+      if (location.hash === "#images") showImages();
     });
   }
 
@@ -1688,61 +1754,6 @@
   /* ============================================================
      COLLECTION
      ============================================================ */
-
-  let tagFilter = "";
-
-  function showCollection() {
-    const v = $("rm-view");
-    const art = collection.slice();
-    const order = store.get("feedOrder", "new");
-    const allTags = [...new Set(art.flatMap((w) => w.tags || []))].sort();
-    let list = art.filter((w) => !tagFilter || (w.tags || []).includes(tagFilter));
-    list = order === "random" ? shuffle(list) : order === "old" ? list : list.slice().reverse();
-    v.innerHTML = `
-      <p class="rm-intro">${art.length ? `everything you've saved: ${art.filter((w) => !w.kind).length} works of art, ${art.filter((w) => w.kind === "nature").length} real photographs, ${art.filter((w) => w.kind === "link").length} from outside, ${art.filter((w) => w.kind === "wreck").length} obliterated.` : "nothing saved yet. press + on any picture in step 1 (pure art, pure images)."}</p>
-      <div class="rm-filters">
-        <span>order <select id="rm-forder"><option value="new">newest first</option><option value="old">oldest first</option><option value="random">mixed up</option></select></span>
-        <span class="rm-why">does something need to be here? add it:</span>
-        <form id="rm-linkadd" class="rm-row"><input name="src" placeholder="paste an image link (https://…jpg)" size="30" required><input name="title" placeholder="what is it" size="14"><button type="submit">+ add</button></form>
-      </div>
-      ${allTags.length ? `<div class="rm-threads">${["", ...allTags].map((t) => `<button type="button" data-t="${esc(t)}" class="${t === tagFilter ? "on" : ""}">${t ? esc(t) : "all"}</button>`).join("")}</div>` : ""}
-      ${art.length > 1 ? `<p class="rm-note"><label><input type="checkbox" id="rm-cmp"> compare: pick two works to see them side by side</label></p>` : ""}
-      <div class="rm-grid" id="rm-cgrid">${list.map(tileHTML).join("")}</div>
-      <div class="rm-backup">
-        <button type="button" id="rm-export">backup</button> · <label class="rm-file">restore<input type="file" id="rm-import" accept=".json" hidden></label>
-        <span class="rm-why">everything here is saved in this browser. backup downloads all of it (words, artists, images, colors, ideas, lists, goals, notes, posts).</span>
-      </div>
-      <div class="rm-compare" id="rm-compare" hidden></div>`;
-    $("rm-forder").value = order;
-    $("rm-forder").addEventListener("change", (e) => { store.set("feedOrder", e.target.value); showCollection(); });
-    $("rm-linkadd").addEventListener("submit", (e) => {
-      e.preventDefault();
-      const f = e.target, src = f.src.value.trim();
-      let host = "outside"; try { host = new URL(src).hostname.replace(/^www\./, ""); } catch (err) { return; }
-      collection.push({ id: "ln-" + uid(), kind: "link", museum: host, title: f.title.value.trim() || "from " + host, artist: host, thumb: src, img: src, url: src, tags: [], note: "", saved: today() });
-      saveAll(); showCollection();
-    });
-
-    v.querySelectorAll(".rm-threads button").forEach((b) => b.addEventListener("click", () => { tagFilter = b.dataset.t; showCollection(); }));
-    const grid = $("rm-cgrid");
-    wireTiles(grid, list);
-    const cmp = $("rm-cmp");
-    if (cmp) {
-      let picking = [];
-      grid.addEventListener("click", (e) => {
-        if (!cmp.checked) return;
-        const t = e.target.closest(".rm-tile");
-        if (!t) return;
-        e.stopImmediatePropagation(); closePanel();
-        const id = t.dataset.id;
-        picking = picking.includes(id) ? picking.filter((x) => x !== id) : picking.concat(id).slice(-2);
-        grid.querySelectorAll(".rm-tile").forEach((x) => x.classList.toggle("picked", picking.includes(x.dataset.id)));
-        if (picking.length === 2) showCompare(picking.map(savedWork));
-      }, true);
-    }
-    $("rm-export").addEventListener("click", exportAll);
-    $("rm-import").addEventListener("change", importAll);
-  }
 
   function showCompare(pair) {
     const c = $("rm-compare");
@@ -1797,7 +1808,7 @@
   function importAll(e) {
     const file = e.target.files[0];
     if (!file) return;
-    file.text().then((txt) => { importData(JSON.parse(txt)); store.set("setup", true); showCollection(); })
+    file.text().then((txt) => { importData(JSON.parse(txt)); store.set("setup", true); showShare(); })
       .catch(() => alertLine("that file isn't a room backup"));
   }
 
@@ -2143,60 +2154,100 @@
     return shuffle([...score.values()]).sort((x, y) => (y.because.size + y.pts / 4) - (x.because.size + x.pts / 4)).slice(0, n);
   }
 
-  async function showPure() {
+  /* ============================================================
+     1 · IMAGES: real art and real photographs, all in one feed,
+     from the words on your inspiration list. Type anything in the
+     bar (an artist from any time, a place, a thing: agnes martin,
+     alaska, tarot cards): it joins the list and the feed.
+       artists  → their work in museum collections (made CUTOFF_YEAR or earlier)
+       anything else → old museum objects of it + the best-rated real
+                       photographs of it on Wikimedia Commons
+     ============================================================ */
+
+  let imgOff = new Set(store.get("imgOff", []));     // words you switched off in the feed
+  let imgView = "feed", imgFirst = "";
+
+  async function picturesFor(w) {
+    const word = w.label;
+    const tag = (list) => list.filter((x) => x.thumb).map((x) => ({ ...x, word }));
+    if (w.type === "artists" || isMine(word)) {
+      const art = await pureFeedFor(word);
+      if (art.some((x) => x.thumb)) return tag(art);
+    }
+    const key = "kw:" + plain(word);
+    let museum = cacheGet(key, CACHE_DAYS);
+    if (!museum) {
+      const [a, c] = await Promise.all([fromChicago(word, 40).catch(() => []), fromCleveland(word).catch(() => [])]);
+      museum = a.concat(c).filter((x) => x.thumb && inRange(x)).slice(0, 40);
+      if (museum.length) cacheSet(key, museum);
+    }
+    const photos = await natureFor(word).catch(() => []);
+    return tag(museum).concat(tag(photos));
+  }
+
+  async function showImages() {
     const v = $("rm-view");
+    const words = palace.words.slice().reverse();
+    const saved = collection.filter((w) => w.img || w.thumb).slice().reverse();
     v.innerHTML = `
       <div class="rm-center">
-        <div id="rm-purebar"></div>
-        <p class="rm-why">add an artist you love. their real work joins the feed below (from museums, made ${CUT} or earlier), and the suggestions change with your list.</p>
+        <div id="rm-imgbar"></div>
+        <p class="rm-why">an artist from any time, a place, a thing. it joins your <a href="#bin">inspiration list</a>, and the feed fills with real art and real photographs of it: museum collections (made ${CUT} or earlier) and credited photographs, never AI.</p>
       </div>
-      <div class="rm-pure" id="rm-purelinks">${mine.map((m) => `<div class="rm-purerow" data-name="${esc(m.name)}"><a href="${artistHref(m.name)}">${esc(m.name)}</a> <span class="rm-plinks rm-why"></span> <button type="button" class="rm-del" data-drop="${esc(m.name)}" title="take off my list">×</button></div>`).join("") || `<p class="rm-empty">your list is empty: type an artist above.</p>`}
-        <div class="rm-purerow rec" id="rm-purerecs"><span class="rm-why">you might love …</span></div>
+      <div class="rm-imgwords" id="rm-imgwords">${words.map((w) => `<button type="button" data-w="${esc(w.id)}" class="${imgOff.has(w.id) ? "" : "on"}${w.type === "artists" ? " artist" : ""}">${esc(w.label)}</button>`).join("") || `<span class="rm-why">your inspiration list is empty: type a word above.</span>`}</div>
+      <div class="rm-filters">
+        <span class="rm-states"><button type="button" data-view="feed" class="${imgView === "feed" ? "on" : ""}">feed</button><button type="button" data-view="saved" class="${imgView === "saved" ? "on" : ""}">saved${saved.length ? ` (${saved.length})` : ""}</button></span>
+        ${imgView === "feed" ? `<button type="button" id="rm-ishuffle">shuffle</button><button type="button" class="rm-why" id="rm-iall">all on</button><button type="button" class="rm-why" id="rm-inone">all off</button><span class="rm-status" id="rm-ist">looking…</span>`
+          : `<form id="rm-realadd" class="rm-row"><input name="src" placeholder="found a real one somewhere else? paste its image link" size="38" required><input name="title" placeholder="what is it" size="14"><button type="submit">+ save</button></form>`}
       </div>
-      <div class="rm-grid four" id="rm-pgrid"><div class="rm-loading">${"<i></i>".repeat(8)}</div></div>
-      <p class="rm-filters"><button type="button" id="rm-pshuffle">shuffle</button></p>`;
+      <div class="rm-grid four" id="rm-igrid">${imgView === "saved" ? (saved.map(tileHTML).join("") || `<p class="rm-empty">nothing saved yet: press + on any picture in the feed.</p>`) : `<div class="rm-loading">${"<i></i>".repeat(8)}</div>`}</div>`;
 
-    const input = typingBar($("rm-purebar"), { placeholder: "add an artist…", onPick: (name) => { addArtist(name); showPure(); } });
+    const input = typingBar($("rm-imgbar"), { placeholder: "search: agnes martin, alaska, tarot cards…", onPick: (name, item) => {
+      let w = palace.words.find((x) => plain(x.label) === plain(name));
+      if (!w) [w] = addWords(name);
+      if (w && item && ARTISTY.test(item.desc)) { w.type = "artists"; placeWord(palace, w); addArtist(name); }
+      if (w) { imgOff.delete(w.id); store.set("imgOff", [...imgOff]); imgFirst = w.id; }
+      imgView = "feed"; saveAll(); showImages();
+    } });
     input.focus();
-    $("rm-pshuffle").addEventListener("click", showPure);
-    v.querySelectorAll("[data-drop]").forEach((b) => b.addEventListener("click", () => {
-      if (!confirmTwice(b, "take off?")) return;
-      mine = mine.filter((m) => plain(m.name) !== plain(b.dataset.drop)); saveAll(); showPure();
+    v.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => { imgView = b.dataset.view; showImages(); }));
+    v.querySelectorAll("[data-w]").forEach((b) => b.addEventListener("click", () => {
+      const id = b.dataset.w;
+      imgOff.has(id) ? imgOff.delete(id) : imgOff.add(id); store.set("imgOff", [...imgOff]);
+      if (!imgOff.has(id)) imgFirst = id;
+      imgView = "feed"; showImages();
     }));
+    if (imgView === "saved") {
+      wireTiles($("rm-igrid"), saved);
+      $("rm-realadd").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const f = e.target, src = f.src.value.trim();
+        let host = ""; try { host = new URL(src).hostname.replace(/^www\./, ""); } catch (err) { return; }
+        collection.push({ id: "ln-" + uid(), kind: "nature", museum: host, title: f.title.value.trim() || "photo from " + host, artist: "found on " + host, thumb: src, img: src, url: src, tags: [], note: "", saved: today() });
+        saveAll(); showImages();
+      });
+      return;
+    }
+    $("rm-ishuffle").addEventListener("click", () => { palace.words.forEach((w) => store.set("c:nat:" + plain(w.label), null)); imgFirst = ""; showImages(); });
+    $("rm-iall").addEventListener("click", () => { imgOff.clear(); store.set("imgOff", []); showImages(); });
+    $("rm-inone").addEventListener("click", () => { palace.words.forEach((w) => imgOff.add(w.id)); store.set("imgOff", [...imgOff]); showImages(); });
 
-    // each artist's ways out: official site / foundation, wikipedia, galleries, museums
-    v.querySelectorAll(".rm-purerow[data-name]").forEach(async (row) => {
-      const name = row.dataset.name;
-      const l = await officialLinks(name);
-      const ek = Object.keys(R.ELSEWHERE || {}).find((k) => plain(k) === plain(name));
-      const links = [
-        l.site && [l.site, "official site"],
-        [l.wiki || "https://en.wikipedia.org/wiki/Special:Search?search=" + encodeURIComponent(name), "wikipedia"],
-        ["https://www.artsy.net/artist/" + plain(name).replace(/[^a-z0-9]+/g, "-"), "galleries"],
-        ...(ek ? R.ELSEWHERE[ek].filter((x, k, all) => all.findIndex((y) => y.where === x.where) === k).slice(0, 3).map((x) => [x.href, x.where]) : [])
-      ].filter(Boolean);
-      const span = row.querySelector(".rm-plinks");
-      if (span) span.innerHTML = links.map(([href, label]) => `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(label)} ↗</a>`).join(" · ");
-    });
-
-    // suggestions, from everyone on your list
-    const recs = await suggestionsFor(mine, 6);
-    const recBox = $("rm-purerecs");
-    if (!recBox) return;
-    recBox.innerHTML = recs.length ? `<span class="rm-why">you might love</span> ${recs.map((r) => `<span class="rm-rec" title="near ${esc([...r.because].join(" + "))}"><a href="${artistHref(r.name)}">${esc(r.name)}</a> <button type="button" class="rm-why" data-add="${esc(r.name)}" title="add to my list">+</button><button type="button" class="rm-why" data-no="${esc(r.name)}" title="not for me">×</button></span>`).join(" · ")}` : "";
-    recBox.querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", () => { addArtist(b.dataset.add); showPure(); }));
-    recBox.querySelectorAll("[data-no]").forEach((b) => b.addEventListener("click", () => { dismissed.push(b.dataset.no); saveAll(); b.parentElement.remove(); }));
-
-    // the feed: your artists, plus a little from the top two suggestions
-    const recNames = recs.slice(0, 2).map((r) => r.name);
-    const names = mine.map((m) => m.name).concat(recNames);
-    const lists = await Promise.all(names.map((n) => pureFeedFor(n).then((l) => l.filter((w) => w.thumb).map((w) => recNames.includes(n) ? { ...w, rec: true } : w)).catch(() => [])));
-    const grid = $("rm-pgrid");
-    if (!grid) return;
-    const pools = lists.map((l) => shuffle(l)), mixed = [];
-    while (pools.some((p) => p.length) && mixed.length < 80) pools.forEach((p) => { if (p.length) mixed.push(p.pop()); });
-    grid.innerHTML = mixed.length ? mixed.map(tileHTML).join("") : `<p class="rm-empty">nothing came back. add an artist above, or check your connection.</p>`;
+    // up to 14 words at a time (shuffle for others); the word you just added goes first
+    let on = shuffle(palace.words.filter((w) => !imgOff.has(w.id)));
+    const first = on.find((w) => w.id === imgFirst);
+    if (first) on = [first].concat(on.filter((w) => w !== first));
+    on = on.slice(0, 14);
+    const grid = $("rm-igrid");
+    if (!on.length) { grid.innerHTML = `<p class="rm-empty">switch on a word above, or type a new one.</p>`; $("rm-ist").textContent = ""; return; }
+    const lists = await Promise.all(on.map((w) => picturesFor(w).catch(() => [])));
+    if (!$("rm-igrid") || root.dataset.page !== "images") return;
+    // the new word's pictures come first, then everything mixed, a few of each at a time
+    const mixed = first ? shuffle(lists[0]).slice(0, 12) : [];
+    const pools = lists.slice(first ? 1 : 0).map((l) => shuffle(l)).concat(first ? [shuffle(lists[0]).slice(12)] : []);
+    while (pools.some((p) => p.length) && mixed.length < 96) pools.forEach((p) => { if (p.length) mixed.push(p.pop()); });
+    grid.innerHTML = mixed.length ? mixed.map(tileHTML).join("") : `<p class="rm-empty">nothing came back for these words. try another, or check your connection.</p>`;
     wireTiles(grid, mixed);
+    $("rm-ist").textContent = `${mixed.length} pictures from ${on.length} word${on.length === 1 ? "" : "s"}` + (on.length < palace.words.filter((w) => !imgOff.has(w.id)).length ? " (shuffle for others)" : "");
   }
 
   /* ============================================================
@@ -2488,132 +2539,6 @@
   }
 
   /* ============================================================
-     2 · OBLITERATE: wreck this journal, for pictures. Only real
-     photographs you saved (or your own work), never anyone
-     else's art. Pixelate, blur, burn, pour water, scratch.
-     ============================================================ */
-
-  const WRECK_TOOLS = [["pixelate", "pixelate"], ["blur", "blur"], ["burn", "burn"], ["water", "smear with water"], ["pour", "pour (click)"], ["scratch", "scratch"]];
-  let wreckTool = "pixelate";
-
-  function showObliterate() {
-    const v = $("rm-view");
-    const list = collection.filter((w) => (w.kind === "nature" || w.kind === "link" || w.kind === "wreck") && (w.img || w.thumb)).slice().reverse()
-      .concat(share.artist ? myWorkAsItems() : []);
-    v.innerHTML = `
-      <p class="rm-intro">destroy a picture: a photograph you saved, or your own work (never someone else's art). drag on it to wreck it.</p>
-      <div class="rm-mbtns" id="rm-wtools">${WRECK_TOOLS.map(([k, l]) => `<button type="button" data-tool="${k}" class="${k === wreckTool ? "on" : ""}">${l}</button>`).join("")}
-        <span>size <input type="range" id="rm-wsize" min="6" max="120" value="${store.get("wsize", 40)}"></span>
-        <button type="button" id="rm-wundo">undo</button><button type="button" id="rm-wreset">start over</button>
-        <button type="button" id="rm-wsave">save to my feed</button><button type="button" id="rm-wdl">download</button>
-        <span class="rm-status" id="rm-wst"></span></div>
-      <div class="rm-wreck" id="rm-wstage">${list.length ? "" : `<p class="rm-empty">nothing to destroy yet: save a photograph in <a href="#nature">1 · real image search</a>.</p>`}</div>
-      <div class="rm-minis open" id="rm-wminis">${list.map((w, i) => `<button type="button" data-i="${i}"><img src="${esc(w.thumb || w.img)}" alt="" loading="lazy" referrerpolicy="no-referrer"></button>`).join("")}</div>`;
-    if (!list.length) return;
-    const stage = $("rm-wstage"), st = $("rm-wst");
-    let cv, ctx, src, undo = [], ok = false;
-    const size = () => +$("rm-wsize").value;
-    $("rm-wsize").addEventListener("change", () => store.set("wsize", size()));
-    v.querySelectorAll("[data-tool]").forEach((b) => b.addEventListener("click", () => {
-      wreckTool = b.dataset.tool; v.querySelectorAll("[data-tool]").forEach((x) => x.classList.toggle("on", x === b));
-    }));
-
-    const load = (w) => {
-      src = w; undo = []; ok = false; st.textContent = "";
-      stage.innerHTML = `<canvas></canvas>`;
-      cv = stage.querySelector("canvas"); ctx = cv.getContext("2d", { willReadFrequently: true });
-      const img = new Image();
-      img.crossOrigin = "anonymous"; img.referrerPolicy = "no-referrer";
-      img.onload = () => {
-        const s = Math.min(stage.clientWidth / img.naturalWidth, Math.max(320, window.innerHeight * 0.62) / img.naturalHeight, 2);
-        cv.width = Math.round(img.naturalWidth * s); cv.height = Math.round(img.naturalHeight * s);
-        ctx.drawImage(img, 0, 0, cv.width, cv.height);
-        try { ctx.getImageData(0, 0, 1, 1); ok = true; } catch (e) { st.textContent = "this picture's website won't let it be changed. try another one."; }
-      };
-      img.onerror = () => { st.textContent = "this picture's website won't let it be changed. try another one."; };
-      img.src = w.img || w.thumb;
-      wire();
-    };
-
-    const at = (e) => { const r = cv.getBoundingClientRect(); const p = e.touches ? e.touches[0] : e; return [(p.clientX - r.left) * cv.width / r.width, (p.clientY - r.top) * cv.height / r.height]; };
-    const snap = () => { undo.push(ctx.getImageData(0, 0, cv.width, cv.height)); if (undo.length > 12) undo.shift(); };
-    const circle = (x, y, r) => { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.clip(); };
-
-    function dab(x, y, lx, ly) {
-      const r = size() / 2;
-      ctx.save();
-      if (wreckTool === "pixelate") {
-        const b = Math.max(6, Math.round(r / 2.5));
-        const x0 = Math.floor((x - r) / b) * b, y0 = Math.floor((y - r) / b) * b;
-        for (let yy = y0; yy < y + r; yy += b) for (let xx = x0; xx < x + r; xx += b) {
-          if (xx < 0 || yy < 0 || xx >= cv.width || yy >= cv.height) continue;
-          const d = ctx.getImageData(xx, yy, Math.min(b, cv.width - xx), Math.min(b, cv.height - yy)).data;
-          let R2 = 0, G = 0, B = 0, n = d.length / 4;
-          for (let i = 0; i < d.length; i += 4) { R2 += d[i]; G += d[i + 1]; B += d[i + 2]; }
-          ctx.fillStyle = `rgb(${R2 / n | 0},${G / n | 0},${B / n | 0})`; ctx.fillRect(xx, yy, b, b);
-        }
-      } else if (wreckTool === "blur") {
-        circle(x, y, r); ctx.filter = `blur(${Math.max(2, r / 6)}px)`; ctx.drawImage(cv, 0, 0);
-      } else if (wreckTool === "burn") {
-        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-        g.addColorStop(0, "rgba(20,8,0,0.35)"); g.addColorStop(0.6, "rgba(90,40,5,0.18)"); g.addColorStop(1, "rgba(120,60,10,0)");
-        ctx.globalCompositeOperation = "multiply"; ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2);
-      } else if (wreckTool === "water") {
-        if (lx == null) { ctx.restore(); return; }
-        circle(x, y, r); ctx.globalAlpha = 0.55; ctx.drawImage(cv, lx - r, ly - r, r * 2, r * 2, x - r, y - r, r * 2, r * 2);
-        ctx.globalAlpha = 0.04; ctx.fillStyle = "#dfe9ee"; ctx.fillRect(x - r, y - r, r * 2, r * 2);
-      } else if (wreckTool === "scratch") {
-        ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.lineWidth = Math.max(1, r / 14);
-        for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.moveTo(x + (Math.random() - 0.5) * r, y + (Math.random() - 0.5) * r); ctx.lineTo(x + (Math.random() - 0.5) * r * 2, y + (Math.random() - 0.5) * r * 2); ctx.stroke(); }
-      }
-      ctx.restore();
-    }
-
-    function pour(x, y) {        // water runs down from where you click, dragging the picture with it
-      const r = size() / 2, streams = 3 + Math.floor(Math.random() * 4);
-      for (let s = 0; s < streams; s++) {
-        let sx = x + (Math.random() - 0.5) * r * 2, sy = y, w = 3 + Math.random() * r / 3, len = cv.height * (0.15 + Math.random() * 0.5);
-        for (let k = 0; k < len && sy < cv.height; k += 2) {
-          ctx.globalAlpha = 0.5; ctx.drawImage(cv, sx, sy, w, 3, sx, sy + 2, w, 3);
-          sx += (Math.random() - 0.5) * 1.5; sy += 2;
-        }
-      }
-      ctx.globalAlpha = 1;
-    }
-
-    function wire() {
-      let down = false, lx = null, ly = null;
-      const start = (e) => { if (!ok) return; e.preventDefault(); snap(); const [x, y] = at(e); if (wreckTool === "pour") { pour(x, y); return; } down = true; dab(x, y); lx = x; ly = y; };
-      const move = (e) => { if (!down) return; e.preventDefault(); const [x, y] = at(e); dab(x, y, lx, ly); lx = x; ly = y; };
-      const end = () => { down = false; lx = ly = null; };
-      cv.addEventListener("mousedown", start); cv.addEventListener("mousemove", move); window.addEventListener("mouseup", end);
-      cv.addEventListener("touchstart", start, { passive: false }); cv.addEventListener("touchmove", move, { passive: false }); cv.addEventListener("touchend", end);
-    }
-
-    $("rm-wundo").addEventListener("click", () => { if (undo.length) ctx.putImageData(undo.pop(), 0, 0); });
-    $("rm-wreset").addEventListener("click", () => load(src));
-    $("rm-wdl").addEventListener("click", () => {
-      if (!ok) return;
-      const a = document.createElement("a"); a.href = cv.toDataURL("image/png"); a.download = "obliterated-" + today() + ".png"; a.click();
-    });
-    $("rm-wsave").addEventListener("click", () => {
-      if (!ok) return;
-      const s = Math.min(1, 700 / Math.max(cv.width, cv.height)), c = document.createElement("canvas");
-      c.width = Math.round(cv.width * s); c.height = Math.round(cv.height * s);
-      c.getContext("2d").drawImage(cv, 0, 0, c.width, c.height);
-      const data = c.toDataURL("image/jpeg", 0.8);
-      collection.push({ id: "wr-" + uid(), kind: "wreck", museum: "mind palace", title: "obliterated: " + (src.title || "untitled"), artist: "me", thumb: data, img: data, url: "", tags: ["obliterated"], note: "", saved: today() });
-      saveAll(); st.innerHTML = `saved to your <a href="#collection">image feed →</a>`;
-    });
-    const minis = $("rm-wminis");
-    minis.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
-      minis.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
-      load(list[+b.dataset.i]);
-    }));
-    minis.querySelector("button").click();
-  }
-
-  /* ============================================================
      3 · COLOR BANK: every color you picked, filling the whole
      page, no gaps. Click one for its pop-up.
      ============================================================ */
@@ -2793,59 +2718,41 @@
   function showShare() {
     const v = $("rm-view");
     const posts = share.posts.slice().reverse();
+    const draft = store.get("postDraft", null);
     v.innerHTML = `
-      <div class="rm-mywork" id="rm-mywork"></div>
-      <div class="rm-share">
-        <div class="rm-sleft">
-          <h4>this room</h4>
-          <input id="rm-rname" value="${esc(share.roomName)}" placeholder="name your room (trinity's room…)">
-          <div class="rm-states" id="rm-artist"><button type="button" data-a="1" class="${share.artist ? "on" : ""}">I am an artist</button><button type="button" data-a="0" class="${share.artist ? "" : "on"}">I am not (yet)</button></div>
-          ${share.artist ? `<p class="rm-row"><input id="rm-ig" value="${esc(share.instagram)}" placeholder="instagram handle" size="18">${share.instagram ? ` <a href="https://instagram.com/${esc(share.instagram.replace(/^@/, ""))}" target="_blank" rel="noopener">↗</a>` : ""}</p>` : ""}
-
-          <h4 class="rm-gap">save</h4>
-          ${share.code ? `<p class="rm-why">your save code (type it on any browser to open your room there; keep it private):</p><p class="rm-code small">${esc(share.code)}</p>` : `<p class="rm-why">no save code yet.</p>`}
-          <p class="rm-row">${share.code ? `<button type="button" id="rm-savenow">save now</button>` : `<button type="button" id="rm-makecode">make my save code</button>`} <button type="button" id="rm-dlback">download a backup</button></p>
-          <p class="rm-why" id="rm-cloudst">${esc(cloudState || (store.get("cloudAt", 0) ? "last saved " + new Date(store.get("cloudAt")).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).toLowerCase() : ""))}</p>
-
-          <h4 class="rm-gap rm-secret" id="rm-rightnow">right now</h4>
-          <p class="rm-why">what life is feeding the art: now listening, now watching, now reading, now loving…</p>
-          <div id="rm-now">${share.now.map((n, k) => `<div class="rm-nowrow" data-k="${k}"><input data-f="label" value="${esc(n.label)}" size="12"><input data-f="title" value="${esc(n.title)}" placeholder="what" size="16"><input data-f="by" value="${esc(n.by || "")}" placeholder="by" size="12"><button type="button" class="rm-del" data-x="${k}">×</button></div>`).join("")}</div>
-          <button type="button" class="rm-why" id="rm-nowadd">+ another</button>
-          <p class="rm-note">for now this all lives in your browser. once it saves online, this page becomes the part other people see. (your goals, plants and notes stay private.)</p>
-          ${share.artist ? `<p><a href="${esc(typeof PORTFOLIO === "string" ? PORTFOLIO : "#")}" target="_blank" rel="noopener">my portfolio ↗</a></p>` : ""}
+      <div class="rm-profile">
+        <input id="rm-rname" class="rm-roomtitle" value="${esc(share.roomName)}" placeholder="name your room" aria-label="your room's name">
+        <div class="rm-savebox">
+          ${share.code
+            ? `<span class="rm-why">save code</span> <span class="rm-code small" title="type it on any browser to open your room there. keep it private.">${esc(share.code)}</span> <button type="button" id="rm-savenow">save now</button>`
+            : `<button type="button" class="rm-btn" id="rm-makecode">make my save code</button> <span class="rm-why">so your room opens on any computer</span>`}
+          <span class="rm-why" id="rm-cloudst">${esc(cloudState || (store.get("cloudAt", 0) ? "last saved " + new Date(store.get("cloudAt")).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).toLowerCase() : ""))}</span>
+          <p class="rm-row rm-backrow rm-why"><button type="button" id="rm-dlback">download a backup</button> · <label class="rm-file">restore a backup<input type="file" id="rm-import" accept=".json" hidden></label> · <a href="#visit">see your room as a visitor →</a></p>
         </div>
-        <div class="rm-sright">
-          <h4>what did you make?</h4>
-          <form id="rm-post" class="rm-postform">
-            <input name="title" placeholder="title" required>
-            <textarea name="text" rows="3" placeholder="progress, a finished piece, research you compiled…"></textarea>
-            <p class="rm-row"><label class="rm-file">+ picture<input type="file" name="file" accept="image/*" hidden></label> <span class="rm-why">or</span> <input name="src" placeholder="an image link" size="22"> <button type="submit" class="rm-btn">post</button> <span class="rm-status" id="rm-pstat"></span></p>
-          </form>
-          <div class="rm-posts">${posts.map((p) => `<article class="rm-post" data-id="${p.id}">${p.img ? `<img src="${esc(p.img)}" alt="" referrerpolicy="no-referrer">` : ""}<div><span class="rm-why">${esc(p.date)}</span><br><b>${esc(p.title)}</b>${p.text ? `<p>${esc(p.text).replace(/\n/g, "<br>")}</p>` : ""}<button type="button" class="rm-del">delete</button></div></article>`).join("") || `<p class="rm-empty">nothing posted yet.</p>`}</div>
-        </div>
+        <form id="rm-post" class="rm-postform rm-postbox">
+          <input name="title" placeholder="title" value="${esc(draft ? draft.title : "")}">
+          <textarea name="text" rows="5" aria-label="post">${esc(draft ? draft.text : "")}</textarea>
+          <p class="rm-row"><label class="rm-file">+ picture<input type="file" name="file" accept="image/*" hidden></label> <span class="rm-why">or</span> <input name="src" placeholder="an image link" size="22"> <button type="submit" class="rm-btn">post</button> <span class="rm-status" id="rm-pstat"></span></p>
+        </form>
+        <div class="rm-posts">${posts.map((p) => `<article class="rm-post" data-id="${p.id}">${p.img ? `<img src="${esc(p.img)}" alt="" referrerpolicy="no-referrer">` : ""}<div><span class="rm-why">${esc(p.date)}</span><br>${p.title ? `<b>${esc(p.title)}</b>` : ""}${p.text ? `<p>${esc(p.text).replace(/\n/g, "<br>")}</p>` : ""}<button type="button" class="rm-del">delete</button></div></article>`).join("")}</div>
       </div>`;
-    drawMyWork($("rm-mywork"));
+    if (draft) store.set("postDraft", null);
     if ($("rm-savenow")) $("rm-savenow").addEventListener("click", () => { $("rm-cloudst").textContent = "saving…"; cloudSave(); });
     if ($("rm-makecode")) $("rm-makecode").addEventListener("click", () => { share.code = makeCode(share.roomName.replace(/'s room$/i, "")); store.set("setup", true); saveAll(); cloudSave(); showShare(); });
     $("rm-dlback").addEventListener("click", exportAll);
-    // the secret: click "right now" three times for your instagram follower counts
-    $("rm-rightnow").addEventListener("click", (e) => { if (e.detail === 3) openFollowers(); });
+    $("rm-import").addEventListener("change", importAll);
     $("rm-rname").addEventListener("input", (e) => { share.roomName = e.target.value; saveAll(); });
-    v.querySelectorAll("#rm-artist button").forEach((b) => b.addEventListener("click", () => { share.artist = b.dataset.a === "1"; saveAll(); showShare(); }));
-    if ($("rm-ig")) $("rm-ig").addEventListener("change", (e) => { share.instagram = e.target.value.trim(); saveAll(); showShare(); });
-    v.querySelectorAll(".rm-nowrow").forEach((row) => {
-      const n = share.now[+row.dataset.k];
-      row.querySelectorAll("[data-f]").forEach((inp) => inp.addEventListener("input", () => { n[inp.dataset.f] = inp.value; saveAll(); }));
-      row.querySelector("[data-x]").addEventListener("click", () => { share.now.splice(+row.dataset.k, 1); saveAll(); showShare(); });
-    });
-    $("rm-nowadd").addEventListener("click", () => { share.now.push({ label: "now loving", title: "" }); saveAll(); showShare(); });
+    // the secret moved here: click your room's name three times for the instagram follower counts
+    $("rm-rname").addEventListener("click", (e) => { if (e.detail === 3) openFollowers(); });
     const form = $("rm-post");
     form.file.addEventListener("change", () => { $("rm-pstat").textContent = form.file.files[0] ? form.file.files[0].name : ""; });
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       let img = form.src.value.trim();
       if (form.file.files[0]) { try { img = await resizeImage(form.file.files[0]); } catch (err) { $("rm-pstat").textContent = "that picture didn't open"; return; } }
-      share.posts.push({ id: uid(), date: today(), title: form.title.value.trim(), text: form.text.value.trim(), img });
+      const title = form.title.value.trim(), text = form.text.value.trim();
+      if (!title && !text && !img) { $("rm-pstat").textContent = "write something or add a picture first"; return; }
+      share.posts.push({ id: uid(), date: today(), title, text, img });
       saveAll();
       if (store.get("share", {}).posts.length !== share.posts.length) { share.posts.pop(); $("rm-pstat").textContent = "the browser is out of room: try a smaller picture, or a link"; return; }
       showShare();
@@ -2856,6 +2763,29 @@
     }));
   }
 
+  /* ---------- a visitor's view of a room (a preview: nobody else can see rooms yet) ----------
+     The idea: a room is an archive of a studio practice. Posts in order, month by month,
+     with the colors the person has been collecting. Their lists, plants and research stay private. */
+  function showVisit() {
+    const v = $("rm-view");
+    const posts = share.posts.slice().sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    const months = [];
+    posts.forEach((p) => { const m = (p.date || "").slice(0, 7); let g = months.find((x) => x.m === m); if (!g) months.push(g = { m, posts: [] }); g.posts.push(p); });
+    const monthName = (m) => { const d = new Date(m + "-15T12:00"); return isNaN(d) ? "undated" : d.toLocaleString("en-US", { month: "long", year: "numeric" }).toLowerCase(); };
+    const strip = colors.slice(-60).map((c) => c.hex);
+    v.innerHTML = `
+      <p class="rm-visitnote rm-why">a preview of your room the way a visitor would see it. nobody else can see it yet. <a href="#share">← back to your profile</a></p>
+      <div class="rm-visit">
+        <h1 class="rm-vname">${esc(share.roomName || "my room")}</h1>
+        <p class="rm-why">${posts.length} post${posts.length === 1 ? "" : "s"}${posts.length ? ` · since ${esc(monthName(posts[posts.length - 1].date.slice(0, 7)))}` : ""}</p>
+        ${strip.length ? `<div class="rm-vcolors" title="colors collected">${strip.map((h) => `<i style="background:${esc(h)}"></i>`).join("")}</div>` : ""}
+        <div class="rm-archive">${months.map((g) => `
+          <section><h4>${esc(monthName(g.m))}</h4>
+            ${g.posts.map((p) => `<article class="rm-vpost${p.img ? "" : " words"}">${p.img ? `<img src="${esc(p.img)}" alt="" referrerpolicy="no-referrer">` : ""}
+              <div><span class="rm-why">${esc(p.date)}</span>${p.title ? `<h3>${esc(p.title)}</h3>` : ""}${p.text ? `<p>${esc(p.text).replace(/\n/g, "<br>")}</p>` : ""}</div></article>`).join("")}
+          </section>`).join("") || `<p class="rm-empty">no posts yet: a visitor would see an empty room. post something on your <a href="#share">profile</a>.</p>`}</div>
+      </div>`;
+  }
 
   /* ============================================================
      THE GARDEN: every idea is a plant.
@@ -2865,16 +2795,15 @@
      harvest. Forget about it and it gets thirsty, then shrinks.
      ============================================================ */
 
-  const DIRT = ".:.:.:.:.";
-  const PLANT_ART = [
-    ["         ", "         ", "         ", "         ", "~~~~~~~~~", ".:.:o:.:."],              // 0 seed
-    ["         ", "         ", "    ,    ", "    |    ", "~~~~|~~~~", DIRT],                     // 1 sprout
-    ["         ", "   \\ /   ", "    |    ", "   \\|    ", "~~~~|~~~~", DIRT],                  // 2 seedling
-    ["    o    ", "   \\|/   ", "    |    ", "   \\|/   ", "~~~~|~~~~", DIRT],                  // 3 bud
-    ["   .-.   ", "  ( @ )  ", "   '|'   ", "   \\|/   ", "~~~~|~~~~", DIRT],                  // 4 flower
-    [" .-'-'-. ", "(  (@)  )", " '-.|.-' ", "  \\\\|//  ", "~~~~|~~~~", DIRT],              // 5 ready to harvest
-    ["  @ @ @  ", "   \\|/   ", "   _|_   ", "  |   |  ", "  |___|  ", "         "]             // 6 harvested
-  ];
+  const PLANT_ART = [["           ", "           ", "           ", "           ", "           ", "     .     ", "~~~~~o~~~~~", ":.:.:.:.:.:"],
+    ["           ", "           ", "           ", "           ", "     ,_    ", "     |     ", "~~~~~|~~~~~", ":.:.:.:.:.:"],
+    ["           ", "           ", "           ", "   _\\ /_   ", "     |     ", "   \\_|     ", "~~~~~|~~~~~", ":.:.:.:.:.:"],
+    ["           ", "     _     ", "    (o)    ", "   \\_|_/   ", "     |     ", "   \\_|_/   ", "~~~~~|~~~~~", ":.:.:.:.:.:"],
+    ["           ", "   \\ ' /   ", "  -.(@).-  ", "   / | \\   ", "   \\_|_/   ", "     |     ", "~~~~~|~~~~~", ":.:.:.:.:.:"],
+    ["  .-'-'-.  ", " ( (\\@/) ) ", "  '-.|.-'  ", "  \\\\_|_//  ", "   \\_|_/   ", "     |     ", "~~~~~|~~~~~", ":.:.:.:.:.:"],
+    ["           ", "  @ @ @ @  ", "   \\\\|//   ", " ___\\|/___ ", " \\       / ", "  \\_____/  ", "           ", "           "]];
+  // the rows that are flower (petals) at each stage
+  const BLOOM_ROWS = [[], [], [], [1, 2], [1, 2], [0, 1, 2], []];
   // every flower gets its own colors (picked from the idea, so they stay the same)
   const PETALS = ["#e86fa0", "#f49ac1", "#f2c230", "#ef8a5a", "#b98ee6", "#ff6f91", "#f6d55c", "#e85d75"];
   const PLANT_COLORS = { g: "#6aa84f", s: "#4e8f3a", d: "#8b5e3c", e: "#5a3a1e", v: "#b5714a" };
@@ -2894,20 +2823,28 @@
     return { stage: grown === 0 ? 0 : stage, grown, p, done, total, days, thirsty: grown > 0 && grown < 5 && days >= 4, wilting: stage < grown };
   }
 
+  // the petal color: the one picked on the idea card, or one of the PETALS by default
+  function petalOf(i) {
+    if (i.color) return i.color;
+    let h = 0; for (const ch of String(i.id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return PETALS[h % PETALS.length];
+  }
+  function centerFor(hex) {      // a center that shows up against the petals
+    const { h, l } = hexToHsl(hex);
+    return (h > 35 && h < 70 && l > 0.45) ? "#c0587e" : "#f2c230";
+  }
+
   function plantHTML(i, size = "") {
     const pl = plantOf(i), st = pl.stage;
+    const petal = petalOf(i), center = centerFor(petal);
     let h = 0; for (const ch of String(i.id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-    const petal = PETALS[h % PETALS.length], yellowish = /f2c230|f6d55c/.test(petal);
-    const center = yellowish ? "#c0587e" : "#f2c230";
     let flowerN = 0;
     const kind = (li, ch) => {
       if (ch === " ") return "";
-      if (st === 6) return li === 0 && ch === "@" ? PETALS[(h + flowerN++ * 3) % PETALS.length] : li === 1 || (li === 2 && ch === "|") ? PLANT_COLORS.s : PLANT_COLORS.v;
-      if (li === 5) return ch === "o" ? PLANT_COLORS.e : PLANT_COLORS.d;
-      if (li === 4) return ch === "~" ? PLANT_COLORS.g : PLANT_COLORS.s;
-      if (ch === "@") return center;
-      if (st === 3 && li === 0) return petal;
-      if (st >= 4 && li <= 2 && !"|\\/".includes(ch)) return petal;
+      if (st === 6) return ch === "@" ? (flowerN++ % 2 ? petal : PETALS[(h + flowerN * 3) % PETALS.length]) : li <= 2 ? PLANT_COLORS.s : PLANT_COLORS.v;
+      if (li === 7) return ch === "o" ? PLANT_COLORS.e : PLANT_COLORS.d;
+      if (li === 6) return ch === "~" ? PLANT_COLORS.g : ch === "o" ? PLANT_COLORS.e : PLANT_COLORS.s;
+      if (BLOOM_ROWS[st].includes(li)) return ch === "@" ? center : ch === "|" ? PLANT_COLORS.s : petal;
       return PLANT_COLORS.s;
     };
     const art = PLANT_ART[st].map((line, li) => [...line].map((ch) => { const c = kind(li, ch); return c ? `<b style="color:${c}">${esc(ch)}</b>` : " "; }).join("")).join("\n");
@@ -2923,20 +2860,44 @@
       + (pl.thirsty ? ` · <span class="rm-late">thirsty: ${pl.days} days since you worked on it${pl.wilting ? ", it's shrinking" : ""}</span>` : "");
   }
 
-  // all the plants, along the bottom of every page
+  // the garden: in the left column under the menu, every flower exactly 2 x 2 grid squares,
+  // lined up on the page's grid. Click a flower to go to its idea.
   function drawGarden() {
     let g = $("rm-garden");
     const live = ideas.filter((i) => !i.harvested || i.harvested >= new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10));
     if (!live.length) { if (g) g.remove(); return; }
-    if (!g) { g = document.createElement("a"); g.id = "rm-garden"; g.className = "rm-garden"; g.href = "#progress"; g.title = "your garden"; document.body.appendChild(g); }
-    g.innerHTML = live.map((i) => `<span class="rm-gplant" title="${esc(i.title || "untitled idea")} · ${PLANT_NAMES[plantOf(i).stage]}">${plantHTML(i, "tiny")}</span>`).join("");
+    if (!g) { g = document.createElement("div"); g.id = "rm-garden"; g.className = "rm-garden"; g.setAttribute("aria-label", "your garden"); document.body.appendChild(g); }
+    g.innerHTML = live.map((i) => `<a href="#ideas" data-idea="${esc(i.id)}" class="rm-gplant" title="${esc(i.title || "untitled idea")} · ${PLANT_NAMES[plantOf(i).stage]}">${plantHTML(i, "plot")}</a>`).join("");
+    g.querySelectorAll("[data-idea]").forEach((a) => a.addEventListener("click", () => { showIdea = a.dataset.idea; if (location.hash === "#ideas") showIdeas(); }));
+    placeGarden();
   }
+  let showIdea = "";
+  function placeGarden() {
+    const g = $("rm-garden"), nav = document.querySelector("#site-header nav");
+    if (!g) return;
+    const G = typeof GRID_SIZE === "number" ? GRID_SIZE : 28;
+    if (window.innerWidth < 760 || !nav) { g.classList.remove("side"); return; }
+    const r = nav.getBoundingClientRect();
+    const top = Math.ceil((r.bottom + G / 2) / G) * G;
+    const cols = Math.max(1, Math.floor((Math.min(r.right, window.innerWidth) - G) / (2 * G)));
+    g.classList.add("side");
+    g.style.setProperty("--g", G + "px");
+    g.style.setProperty("--top", top + "px");
+    g.style.setProperty("--cols", cols);
+  }
+  window.addEventListener("resize", placeGarden);
 
   /* ============================================================
      IDEAS (the idea board)
      ============================================================ */
 
   const IDEA_STATES = ["seed", "sketching", "making", "done"];
+
+  // flower colors to choose from: the usual petals, plus the newest colors in your bank
+  function flowerChoices() {
+    const fromBank = [...new Set(colors.slice().reverse().map((c) => c.hex))].slice(0, 8);
+    return [...new Set(PETALS.concat(fromBank))];
+  }
 
   function showIdeas() {
     const v = $("rm-view");
@@ -2951,8 +2912,10 @@
             <input class="rm-ititle" value="${esc(i.title)}" placeholder="working title">
             <p class="rm-why rm-iline">${plantLine(i)}</p>
             ${pl.stage === 5 ? `<button type="button" class="rm-btn" data-harvest="1">harvest it</button>` : ""}
+            ${pl.stage === 6 ? `<a href="#share" data-postit="1">post it to your room →</a>` : ""}
           </div></div>
           <div class="rm-states">${IDEA_STATES.map((s) => `<button type="button" data-s="${s}" class="${i.status === s ? "on" : ""}">${s}</button>`).join("")}</div>
+          <div class="rm-icolors"><span class="rm-why">flower</span>${flowerChoices().map((h) => `<button type="button" data-petal="${esc(h)}" style="--c:${esc(h)}" class="${petalOf(i) === h ? "on" : ""}" title="${esc(h)}"></button>`).join("")}</div>
           <textarea class="rm-inotes" rows="4" placeholder="size, materials, colors, the feeling, what it's in conversation with…">${esc(i.notes)}</textarea>
           <div class="rm-ilinks">
             <select class="rm-ilist" aria-label="order of operations list"><option value="">connect a list…</option>${lists.map((l) => `<option value="${l.id}"${i.list === l.id ? " selected" : ""}>${esc(l.name || "untitled list")}</option>`).join("")}<option value="new">+ a new list for this idea</option></select>
@@ -2983,6 +2946,9 @@
         i.status = b.dataset.s; saveAll();
         card.querySelectorAll(".rm-states button").forEach((x) => x.classList.toggle("on", x === b));
       }));
+      card.querySelectorAll("[data-petal]").forEach((b) => b.addEventListener("click", () => { i.color = b.dataset.petal; saveAll(); showIdeas(); }));
+      const pi = card.querySelector("[data-postit]");
+      if (pi) pi.addEventListener("click", () => { store.set("postDraft", { title: i.title || "", text: i.notes || "" }); });
       const hv = card.querySelector("[data-harvest]");
       if (hv) hv.addEventListener("click", () => { i.harvested = today(); i.status = "done"; saveAll(); showIdeas(); });
       card.querySelectorAll(".rm-ref").forEach((b) => b.addEventListener("click", () => openPanel(savedWork(b.dataset.ref))));
@@ -2992,135 +2958,16 @@
         ideas = ideas.filter((x) => x.id !== i.id); saveAll(); showIdeas();
       });
     });
-  }
-
-  /* ============================================================
-     3 · PROGRESS TRACKER: the whole garden, and goals you set
-     for yourself (draw every day, the november challenge…).
-     Private: none of this goes on your profile.
-     ============================================================ */
-
-  const dayKey = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
-  const fromKey = (k) => new Date(k + "T12:00");
-
-  function goalDays(g) {
-    const end = g.end ? fromKey(g.end) : new Date();
-    let start = fromKey(g.start);
-    if (!g.end) { const s = new Date(); s.setDate(s.getDate() - 34); if (s > start) start = s; }   // open goals show the last 5 weeks
-    const out = [];
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) out.push(dayKey(d));
-    return out;
-  }
-  function streakOf(g) {
-    let n = 0; const d = new Date();
-    if (!g.days[dayKey(d)]) d.setDate(d.getDate() - 1);      // today not done yet doesn't break it
-    while (g.days[dayKey(d)]) { n++; d.setDate(d.getDate() - 1); }
-    return n;
-  }
-
-  function showProgress() {
-    const v = $("rm-view");
-    const t = dayKey(new Date()), y = new Date().getFullYear();
-    const growing = ideas.filter((i) => !i.harvested), picked = ideas.filter((i) => i.harvested);
-    v.innerHTML = `
-      <p class="rm-intro">just for you: your garden of ideas, and the goals you've set. nothing here goes on your profile.</p>
-      <h4>the garden</h4>
-      ${growing.length ? `<div class="rm-garden-big">${growing.map((i) => `<a href="#ideas" class="rm-gcell">${plantHTML(i)}<b>${esc(i.title || "untitled idea")}</b><span class="rm-why">${plantLine(i).replace(/<a [^>]*>|<\/a>/g, "")}</span></a>`).join("")}</div>`
-        : `<p class="rm-why">nothing growing yet: <a href="#ideas">plant an idea</a>.</p>`}
-      ${picked.length ? `<h4 class="rm-gap">harvested</h4><div class="rm-garden-big small">${picked.map((i) => `<a href="#ideas" class="rm-gcell">${plantHTML(i)}<b>${esc(i.title || "untitled")}</b><span class="rm-why">${esc(i.harvested)}</span></a>`).join("")}</div>` : ""}
-
-      <h4 class="rm-gap">goals</h4>
-      <div class="rm-mbtns">
-        <button type="button" data-preset="daily">+ draw every day</button>
-        <button type="button" data-preset="nov">+ november drawing challenge</button>
-        <form id="rm-goaladd" class="rm-row"><input name="name" placeholder="your own goal" size="18" required><input name="start" type="date" value="${t}"><span class="rm-why">to</span><input name="end" type="date"><button type="submit">+ add</button></form>
-      </div>
-      <div class="rm-goals">${goals.map((g) => {
-        const days = goalDays(g), done = Object.keys(g.days).filter((k) => g.days[k]).length;
-        const pad = (fromKey(days[0]).getDay() + 6) % 7;      // weeks start on monday
-        return `<div class="rm-goal" data-id="${g.id}">
-          <div class="rm-goalhead"><b>${esc(g.name)}</b><span class="rm-why">${g.end ? `${esc(g.start)} → ${esc(g.end)} · ` : "every day · "}${done} day${done === 1 ? "" : "s"} · streak ${streakOf(g)}</span></div>
-          <div class="rm-days">${"<i class='pad'></i>".repeat(pad)}${days.map((k) => `<button type="button" data-day="${k}" class="${g.days[k] ? "on" : ""}${k === t ? " today" : ""}${k > t ? " later" : ""}" title="${k}"${k > t ? " disabled" : ""}>${+k.slice(8)}</button>`).join("")}</div>
-          <button type="button" class="rm-del">delete goal</button>
-        </div>`;
-      }).join("") || `<p class="rm-why">no goals yet. click a day to mark it done.</p>`}</div>`;
-
-    const add = (name, start, end) => { goals.unshift({ id: uid(), name, start, end, days: {} }); saveAll(); showProgress(); };
-    v.querySelector('[data-preset="daily"]').addEventListener("click", () => add("draw every day", t, ""));
-    v.querySelector('[data-preset="nov"]').addEventListener("click", () => add(`november drawing challenge ${y}`, `${y}-11-01`, `${y}-11-30`));
-    $("rm-goaladd").addEventListener("submit", (e) => { e.preventDefault(); const f = e.target; add(f.name.value.trim(), f.start.value || t, f.end.value); });
-    v.querySelectorAll(".rm-goal").forEach((card) => {
-      const g = goals.find((x) => x.id === card.dataset.id);
-      card.querySelectorAll("[data-day]").forEach((b) => b.addEventListener("click", () => { g.days[b.dataset.day] = !g.days[b.dataset.day]; saveAll(); showProgress(); }));
-      const del = card.querySelector(".rm-del");
-      del.addEventListener("click", () => { if (!confirmTwice(del)) return; goals = goals.filter((x) => x.id !== g.id); saveAll(); showProgress(); });
-    });
-  }
-
-  /* ============================================================
-     4 · NOTES: a free pad on graph paper. Type, or switch to
-     draw and draw right on top. Saved in this browser.
-     ============================================================ */
-
-  let noteAt = 0, noteMode = "type", notePen = "pencil";
-  const PENS = { pencil: ["#777", 2], ink: ["#111", 2.5], marker: ["#bbb", 10], eraser: [null, 22] };
-
-  function showNotes() {
-    const v = $("rm-view");
-    if (noteAt >= notes.length) noteAt = 0;
-    const n = notes[noteAt];
-    v.innerHTML = `
-      <div class="rm-notetabs">${notes.map((x, k) => `<button type="button" data-k="${k}" class="${k === noteAt ? "on" : ""}">${esc(x.title || "untitled")}</button>`).join("")}<button type="button" id="rm-newnote">+ page</button></div>
-      <div class="rm-mbtns rm-notetools">
-        <input id="rm-ntitle" value="${esc(n.title)}" placeholder="page name" size="18">
-        <button type="button" data-mode="type" class="${noteMode === "type" ? "on" : ""}">type</button>
-        <button type="button" data-mode="draw" class="${noteMode === "draw" ? "on" : ""}">draw</button>
-        <span class="rm-pens"${noteMode === "draw" ? "" : " hidden"}>${Object.keys(PENS).map((k) => `<button type="button" data-pen="${k}" class="${notePen === k ? "on" : ""}">${k}</button>`).join("")}<button type="button" id="rm-nclear" class="rm-del">clear drawing</button></span>
-        <button type="button" class="rm-del" id="rm-ndel">delete page</button>
-      </div>
-      <div class="rm-sheet ${noteMode}">
-        <textarea id="rm-ntext" placeholder="anything…">${esc(n.text)}</textarea>
-        <canvas id="rm-ncv" width="1600" height="1000"></canvas>
-      </div>`;
-    const cv = $("rm-ncv"), ctx = cv.getContext("2d");
-    if (n.draw) { const im = new Image(); im.onload = () => ctx.drawImage(im, 0, 0); im.src = n.draw; }
-    v.querySelectorAll(".rm-notetabs [data-k]").forEach((b) => b.addEventListener("click", () => { noteAt = +b.dataset.k; showNotes(); }));
-    $("rm-newnote").addEventListener("click", () => { notes.push({ id: uid(), title: "", text: "", draw: "" }); noteAt = notes.length - 1; saveAll(); showNotes(); $("rm-ntitle").focus(); });
-    $("rm-ntitle").addEventListener("input", (e) => { n.title = e.target.value; saveAll(); });
-    $("rm-ntext").addEventListener("input", (e) => { n.text = e.target.value; saveAll(); });
-    v.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => { noteMode = b.dataset.mode; showNotes(); }));
-    v.querySelectorAll("[data-pen]").forEach((b) => b.addEventListener("click", () => { notePen = b.dataset.pen; v.querySelectorAll("[data-pen]").forEach((x) => x.classList.toggle("on", x === b)); }));
-    $("rm-nclear").addEventListener("click", (e) => { if (!confirmTwice(e.currentTarget, "click again to clear")) return; ctx.clearRect(0, 0, cv.width, cv.height); n.draw = ""; saveAll(); });
-    const del = $("rm-ndel");
-    del.addEventListener("click", () => {
-      if (!confirmTwice(del)) return;
-      notes.splice(noteAt, 1); if (!notes.length) notes.push({ id: uid(), title: "notes", text: "", draw: "" });
-      noteAt = 0; saveAll(); showNotes();
-    });
-
-    let down = false, lx = 0, ly = 0;
-    const at = (e) => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height]; };
-    cv.addEventListener("pointerdown", (e) => { if (noteMode !== "draw") return; down = true; cv.setPointerCapture(e.pointerId); [lx, ly] = at(e); line(lx + 0.1, ly + 0.1); });
-    cv.addEventListener("pointermove", (e) => { if (!down) return; const [x, y] = at(e); line(x, y); });
-    const stop = () => { if (!down) return; down = false; n.draw = cv.toDataURL("image/png"); saveAll(); };
-    cv.addEventListener("pointerup", stop); cv.addEventListener("pointercancel", stop);
-    function line(x, y) {
-      const [color, w] = PENS[notePen];
-      ctx.save();
-      ctx.globalCompositeOperation = color ? "source-over" : "destination-out";
-      ctx.strokeStyle = color || "#000"; ctx.lineWidth = w * (cv.width / cv.getBoundingClientRect().width); ctx.lineCap = "round"; ctx.lineJoin = "round";
-      ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(x, y); ctx.stroke();
-      ctx.restore();
-      lx = x; ly = y;
+    // came from a flower in the garden: go to its card
+    if (showIdea) {
+      const card = v.querySelector(`.rm-idea[data-id="${CSS.escape(showIdea)}"]`);
+      showIdea = "";
+      if (card) { card.scrollIntoView({ block: "center" }); card.classList.add("lit"); setTimeout(() => card.classList.remove("lit"), 1600); }
     }
   }
 
-
-  /* ============================================================
-     SECRET: instagram follower counts (profile → triple-click
-     "right now"). Read live by worker.js with Instagram's
-     official API; setup in INSTAGRAM-SETUP.md.
-     ============================================================ */
+  /* (the progress tracker and notes pages are put away for now: their saved data
+     (goals, notes) is still kept and still goes in backups.) */
 
   const IG_HANDLES = ["projectgallery", "triiinity.lester"];
 

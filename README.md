@@ -3,10 +3,13 @@
 A research room for artists and curious people, in four steps of making something.
 The menu runs down the left column:
 
-1. **remembering** — inspiration list, pure art (your artists + their work + suggestions, one page), library (your PDFs, read two pages at a time), pure images
-2. **collecting** — image feed, color picker, splitscreen, obliterate
-3. **creating** — color bank (with the color machine in a pop-up), idea board, order of operations, progress tracker
-4. **posting** — profile, notes
+1. **remembering** — inspiration list, images (one search bar: artists from any time, places, things; one feed of real art + real photographs, built from your inspiration list), library (your PDFs, read two pages at a time)
+2. **collecting** — color picker, splitscreen (art next to the world; pick colors, or pixelate / blur / burn / smear / pour / scratch a photograph or your own work, never someone else's art)
+3. **creating** — color bank (every color in its own grid square), idea board (white cards; pick each flower's color), order of operations
+4. **posting** — profile: your save code and a box to post to your room. "see your room as a visitor" previews the archive other people would see.
+
+A little line at the bottom of each page walks the whole way through, start to finish.
+The garden lives in the left column under the menu: every idea is a flower exactly 2 x 2 grid squares.
 
 Every idea on the idea board is an ascii plant: connect it to a list on order of operations and each
 step checked off waters it (seed → sprout → seedling → bud → flower → ready to harvest). Forgotten

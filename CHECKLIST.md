@@ -36,3 +36,12 @@
 - [ ] instagram: a real connection needs Meta's app review; for now it's a link
 - [ ] more real-image sources (Flickr Commons, Library of Congress, old internet archives: the tumblr feeling)
 - [ ] obliterate: tearing, fire that spreads, layering two pictures
+
+## nov 5: simplified
+- [x] images: pure art + pure images in one page, one search bar, the feed comes from the inspiration list
+- [x] image feed + obliterate pages removed (obliterate's tools are in splitscreen; saved pictures are under images → saved)
+- [x] garden in the left column, flowers 2 x 2 grid squares, more detailed ascii, colors picked on the idea card
+- [x] profile: save code + a box to post; "see your room as a visitor" preview
+- [ ] progress tracker is put away (its goals are still saved): bring it back inside order of operations later
+- [ ] notes page put away (notes still saved in backups)
+- [ ] rooms going public: a real address for each room's archive (name.mindpalace.whatever), posts only, lists + plants private
