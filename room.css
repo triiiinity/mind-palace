@@ -759,3 +759,25 @@ body.rm-noscroll { overflow: hidden; }
   .rm-spread.cover { padding-left: 0; justify-content: center; }
 }
 .rm-purerow.rec .rm-rec { display: inline-flex; flex-direction: row; gap: 4px; align-items: baseline; }
+
+/* ---------- color bank on the grid: one color per grid square ----------
+   placeBank() in room.js lines it up with the page's grid (GRID_SIZE in base.js).
+   If there are more colors than squares, it scrolls a whole row at a time
+   so it never falls off the lines. */
+.rm-bank.on-grid {
+  position: fixed; z-index: 5;
+  left: calc(var(--x) + 1px); top: calc(var(--y) + 1px); right: var(--g); bottom: 0;
+  display: grid; gap: 1px; padding: 0;
+  grid-template-columns: repeat(var(--cols), calc(var(--g) - 1px));
+  grid-auto-rows: calc(var(--g) - 1px);
+  align-content: start; min-height: 0;
+  overflow-y: auto; scrollbar-width: none;
+}
+.rm-bank.on-grid::-webkit-scrollbar { display: none; }
+.rm-bank.on-grid button {
+  width: auto; height: auto; min-height: 0; aspect-ratio: auto;
+  animation: bank-fill .35s ease both; animation-delay: var(--d, 0ms);
+}
+.rm-bank.on-grid button:hover { outline: 1px solid #000; outline-offset: 0; position: relative; z-index: 1; }
+.rm-bank.on-grid.filled button { animation: none; }
+@keyframes bank-fill { from { transform: scale(0); } to { transform: scale(1); } }

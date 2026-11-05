@@ -2630,6 +2630,7 @@
       <div class="rm-pop" id="rm-pop" hidden></div>`;
     $("rm-move").addEventListener("click", openMachine);
     $("rm-roll").addEventListener("click", rollBank);
+    placeBank();
     const chip = $("rm-hexchip"), pop = $("rm-pop");
     v.querySelectorAll("#rm-bank button").forEach((b) => {
       b.addEventListener("mouseenter", () => { const r = b.getBoundingClientRect(); chip.textContent = b.dataset.hex; chip.style.left = r.left + r.width / 2 + "px"; chip.style.top = r.top - 4 + "px"; chip.hidden = false; });
@@ -2652,6 +2653,43 @@
       });
     });
   }
+
+  // the bank sits right on the page's grid: one color per grid square. It stays where it
+  // was (under the count + roll, right of the menu), nudged onto the nearest grid lines,
+  // and holds still while the grid holds still. More colors than squares: it scrolls a whole row at a time.
+  function placeBank() {
+    const box = $("rm-bank"), top = document.querySelector(".rm-banktop"), view = $("rm-view");
+    if (!box || !top || !view) return;
+    const G = typeof GRID_SIZE === "number" ? GRID_SIZE : 28;
+    window.scrollTo(0, 0);
+    const x = Math.round(view.getBoundingClientRect().left / G) * G;
+    const y = Math.ceil((top.getBoundingClientRect().bottom + 4) / G) * G;
+    const cols = Math.max(1, Math.floor((window.innerWidth - x - G) / G));
+    box.classList.add("on-grid");
+    box.style.setProperty("--g", G + "px");
+    box.style.setProperty("--x", x + "px");
+    box.style.setProperty("--y", y + "px");
+    box.style.setProperty("--cols", cols);
+    // the colors fill in, one square at a time, like collecting them (only when the page opens)
+    if (!box.dataset.filled) {
+      box.dataset.filled = "1";
+      [...box.children].forEach((c, i) => c.style.setProperty("--d", Math.min(i * 6, 900) + "ms"));
+      setTimeout(() => box.classList.add("filled"), 1400);
+    }
+    // after scrolling, settle back onto the grid lines
+    if (!box.dataset.snaps) {
+      box.dataset.snaps = "1";
+      let t;
+      box.addEventListener("scroll", () => {
+        clearTimeout(t);
+        t = setTimeout(() => {
+          const want = Math.round(box.scrollTop / G) * G;
+          if (Math.abs(want - box.scrollTop) > 0.5) box.scrollTo({ top: want, behavior: "smooth" });
+        }, 120);
+      });
+    }
+  }
+  window.addEventListener("resize", () => { if (root.dataset.page === "bank") placeBank(); });
 
   // the dice: every box slides to a new random place
   function rollBank() {

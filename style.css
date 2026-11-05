@@ -993,7 +993,9 @@ html.grid-always body { background: transparent; }
 /* the bar along the top keeps the grid too (so nothing shows through it when you scroll) */
 html.grid-always .name-bar {
   background-color: #fff;
-  background-image: inherit; background-size: inherit; background-attachment: fixed;
+  background-image: linear-gradient(var(--gridline) 1px, transparent 1px), linear-gradient(90deg, var(--gridline) 1px, transparent 1px);
+  background-size: var(--grid, 28px) var(--grid, 28px);
+  background-attachment: fixed;
 }
 /* a click still opens a darker circle of grid on top */
 html.grid-always .grid-layer { --line: #c4c4c4; z-index: 0; }
