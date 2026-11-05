@@ -34,6 +34,12 @@ const PLUS_SHADES = ["#4a4a4a", "#666666", "#808080", "#999999", "#b3b3b3", "#cc
 const GRID_SIZE = 28;
 const GRID_RADIUS = 90;
 const GRID_STAYS = 1.6;
+/* GRID_ALWAYS = true: the grid shows on the whole page, all the time (a click
+   still makes a darker circle of grid). false = back to grid-only-on-click.
+   To hide it on one page, add that page to GRID_OFF, e.g. ["bank", "web"].
+   (the page names are the words after # in the address) */
+const GRID_ALWAYS = true;
+const GRID_OFF = [];
 
 /* ---------- YOUR WORKS (from the portfolio) ---------- */
 
@@ -86,6 +92,15 @@ function markMenu() {
 /* ---------- THE GRID: shows through wherever you click on empty space ---------- */
 
 function startGrid() {
+  if (GRID_ALWAYS) {
+    document.documentElement.classList.add("grid-always");
+    document.documentElement.style.setProperty("--grid", GRID_SIZE + "px");
+    const off = () => {
+      const page = location.hash.slice(1).split("/")[0] || "home";
+      document.documentElement.classList.toggle("grid-off", GRID_OFF.includes(page));
+    };
+    off(); window.addEventListener("hashchange", off);
+  }
   const layer = document.createElement("div");
   layer.className = "grid-layer";
   layer.style.setProperty("--grid", GRID_SIZE + "px");

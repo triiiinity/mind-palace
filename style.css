@@ -974,3 +974,43 @@ body { background: transparent; }
 .menu-pages { display: none; flex-direction: column; gap: 3px; padding: 3px 0 2px; }
 .menu-step:hover .menu-pages, .menu-step.open .menu-pages, .menu-step.here .menu-pages { display: flex; animation: fade-in .2s ease; }
 #site-header nav.menu { gap: 10px; }
+
+/* ============================================================
+   THE GRID EVERYWHERE (GRID_ALWAYS in base.js)
+   The gray grid sits behind the whole page and stays still while
+   you scroll. Text sits on soft white "clouds" so it stays easy
+   to read. --cloud = how white the clouds are (1 = solid white).
+   ============================================================ */
+html.grid-always {
+  --cloud: rgba(255, 255, 255, 0.9);
+  --gridline: var(--line);
+  background-color: #fff;
+  background-image: linear-gradient(var(--gridline) 1px, transparent 1px), linear-gradient(90deg, var(--gridline) 1px, transparent 1px);
+  background-size: var(--grid, 28px) var(--grid, 28px);
+  background-attachment: fixed;
+}
+html.grid-always body { background: transparent; }
+/* the bar along the top keeps the grid too (so nothing shows through it when you scroll) */
+html.grid-always .name-bar {
+  background-color: #fff;
+  background-image: inherit; background-size: inherit; background-attachment: fixed;
+}
+/* a click still opens a darker circle of grid on top */
+html.grid-always .grid-layer { --line: #c4c4c4; z-index: 0; }
+html.grid-off { background-image: none; }
+html.grid-off .name-bar { background-image: none; }
+
+/* the clouds: soft white behind text */
+html.grid-always .name-bar a,
+html.grid-always #site-header nav.menu,
+html.grid-always .room :is(p, h1, h2, h3, h4, label, ul, ol, figcaption, .rm-rtop, .rm-cap, .rm-filters, .rm-banktop, .rm-crumbs, .rm-chips, .rm-purerow, .rm-mywork, .rm-steps, .rm-book > span, .rm-book > a:not(.rm-cover), .rm-card > b, .rm-card > span, .rm-rec, .rm-tree, .rm-oitem) {
+  background-color: var(--cloud);
+  box-shadow: 0 0 12px 8px var(--cloud);
+  border-radius: 10px;
+}
+html.grid-always #site-header nav.menu { padding-top: 6px; padding-bottom: 12px; margin-left: 10px; width: fit-content; }
+/* things that already have their own white box don't need a second cloud */
+html.grid-always .room :is(.rm-panel, .rm-pop, .rm-cpop, .rm-drop, .rm-suggest, .rm-tip, .rm-node, .rm-loupe, .rm-hexchip) :is(p, h1, h2, h3, h4, label, ul, ol) { box-shadow: none; background-color: transparent; }
+/* pictures and colors sit straight on the grid */
+html.grid-always .room :is(.rm-grid, .rm-bank, .rm-swatches, .rm-strip, .rm-spread) { background: transparent; }
+html.grid-always .room .rm-pic, html.grid-always .room .rm-strip i { background: rgba(250, 250, 250, 0.85); }
