@@ -6,6 +6,8 @@
                       read with Instagram's official API
      /api/room/CODE   a room saved online under its save code
                       (GET opens it, PUT saves it)
+     /api/file/CODE/ID  a PDF in that room's library (GET, PUT, DELETE).
+                      Only someone with the save code can reach it.
 
    The keys (access tokens) live in Cloudflare as secrets, never in
    these files. Setup steps: INSTAGRAM-SETUP.md.
@@ -24,6 +26,7 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === "/api/followers") return followers(env);
     if (url.pathname.startsWith("/api/room/")) return room(request, env, decodeURIComponent(url.pathname.slice(10)));
+    if (url.pathname.startsWith("/api/file/")) return file(request, env, url.pathname.slice(10).split("/").map(decodeURIComponent));
     return env.ASSETS.fetch(request);           // every other address: the site's files
   },
 
@@ -89,5 +92,34 @@ async function room(request, env, code) {
     await env.KV.put(key, text);
     return json({ saved: new Date().toISOString() });
   }
+  return json({ error: "no" }, 405);
+}
+
+/* ---------- the library: PDFs kept with a room ----------
+   Stored under the room's save code, so only its owner can open them.
+   Up to 24 MB each (Cloudflare's storage holds up to 25 MB per thing). */
+
+const FILE_ID = /^[a-z0-9]{6,24}$/;
+const FILE_MAX = 24 * 1024 * 1024;
+
+async function file(request, env, [code, id]) {
+  const json = (body, status) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store", "x-robots-tag": "noindex" } });
+  if (!CODE.test(code || "") || !FILE_ID.test(id || "")) return json({ error: "not a file address" }, 400);
+  if (!env.KV) return json({ error: "online saving isn't switched on" }, 503);
+  const key = "file:" + code + ":" + id;
+  if (request.method === "GET") {
+    const data = await env.KV.get(key, "arrayBuffer");
+    if (!data) return json({ error: "no such file" }, 404);
+    return new Response(data, { headers: { "content-type": "application/pdf", "cache-control": "private, no-store", "x-robots-tag": "noindex" } });
+  }
+  if (request.method === "PUT") {
+    const data = await request.arrayBuffer();
+    if (data.byteLength > FILE_MAX) return json({ error: "too big" }, 413);
+    const head = new Uint8Array(data.slice(0, 5));
+    if (String.fromCharCode(...head) !== "%PDF-") return json({ error: "not a PDF" }, 400);
+    await env.KV.put(key, data);
+    return json({ saved: new Date().toISOString() }, 200);
+  }
+  if (request.method === "DELETE") { await env.KV.delete(key); return json({ deleted: true }, 200); }
   return json({ error: "no" }, 405);
 }

@@ -67,6 +67,7 @@
   let gardenReady = false;                                // the garden (bottom of the page) draws once everything is set up
   let goals = store.get("goals", []);                     // progress tracker: {id, name, start, end, days:{date:true}}
   let notes = store.get("notes", null) || [{ id: uid(), title: "notes", text: "", draw: "" }];
+  let books = store.get("books", []);   // your library: {id, title, author, pages, size, added, page, thumb, cloud}. the PDFs themselves live in IndexedDB
   let share = store.get("share", null) || { roomName: R.ROOM_NAME || "my room", artist: true, instagram: "", now: (R.NOW || []).map((x) => ({ ...x })), posts: [] };
 
   function saveAll() {
@@ -75,6 +76,7 @@
     store.set("palace", palace); store.set("legend", legend);
     store.set("natureTags", natureTags); store.set("colors", colors); store.set("combos", combos);
     store.set("lists", lists); store.set("share", share); store.set("goals", goals); store.set("notes", notes);
+    store.set("books", books);
     if (gardenReady) { drawGarden(); cloudSoon(); }
   }
 
@@ -265,7 +267,7 @@
 
   /* the four steps. The menu itself is in the left column (base.js); these feed the home page. */
   const STEPS = [
-    { n: 1, label: "remembering", line: "everything you carry around", pages: [["bin", "inspiration list"], ["artists", "other artists"], ["pure", "pure art"], ["nature", "pure images"]] },
+    { n: 1, label: "remembering", line: "everything you carry around", pages: [["bin", "inspiration list"], ["pure", "pure art"], ["library", "library"], ["nature", "pure images"]] },
     { n: 2, label: "collecting", line: "gathering what you remember", pages: [["collection", "image feed"], ["picker", "color picker"], ["split", "splitscreen"], ["obliterate", "obliterate"]] },
     { n: 3, label: "creating", line: "now you should have an idea", pages: [["bank", "color bank"], ["ideas", "idea board"], ["order", "order of operations"], ["progress", "progress tracker"]] },
     { n: 4, label: "posting", line: "what did you make", pages: [["share", "profile"], ["notes", "notes"]] }
@@ -297,14 +299,16 @@
   function route() {
     const h = decodeURIComponent(location.hash.slice(1));
     const isArtist = h.startsWith("artist/");
-    const page = isArtist ? "artists" : PAGES.includes(h) ? h : "home";
+    const isBook = h.startsWith("read/");
+    const page = isArtist ? "pure" : isBook ? "library" : h === "artists" ? "pure" : PAGES.includes(h) ? h : "home";
     closePanel();
     root.classList.toggle("on-web", page === "web");
     root.classList.toggle("on-bank", page === "bank");
     root.dataset.page = page;
     if (isArtist) showArtist(h.slice(7));
-    else ({ home: showHome, pure: showPure, picker: showPicker, obliterate: showObliterate, bank: showBank, order: showOrder, share: showShare,
-            artists: showArtists, collection: showCollection, nature: showNature, split: showSplit, bin: showBin, ideas: showIdeas,
+    else if (isBook) showBook(h.slice(5));
+    else ({ home: showHome, pure: showPure, library: showLibrary, picker: showPicker, obliterate: showObliterate, bank: showBank, order: showOrder, share: showShare,
+            collection: showCollection, nature: showNature, split: showSplit, bin: showBin, ideas: showIdeas,
             progress: showProgress, notes: showNotes })[page]();
     closeMachine();
     drawGarden();
@@ -348,33 +352,6 @@
      ARTISTS: your list
      ============================================================ */
 
-  function showArtists() {
-    const v = $("rm-view");
-    v.innerHTML = `
-      <div class="rm-center">
-        <div id="rm-addbar"></div>
-        <p class="rm-why">type an artist you love. they join your list and get a page of their work (made ${CUT} or earlier).</p>
-      </div>
-      <div class="rm-mine">${mine.slice().reverse().map((m) => `
-        <a class="rm-card" href="${artistHref(m.name)}" data-name="${esc(m.name)}">
-          <span class="rm-strip"><i></i><i></i><i></i><i></i></span>
-          <b>${esc(m.name)}</b>
-          <span class="rm-why rm-desc"></span>
-        </a>`).join("") || `<p class="rm-empty">your list is empty: type a name above.</p>`}</div>`;
-
-    const input = typingBar($("rm-addbar"), { placeholder: "add an artist…", onPick: (name) => { addArtist(name); location.hash = artistHref(name); } });
-    input.focus();
-
-    // fill in the previews one by one
-    v.querySelectorAll(".rm-card").forEach(async (card) => {
-      const name = card.dataset.name;
-      const [pics, about] = await Promise.all([previewOf(name), aboutArtist(name)]);
-      const cells = card.querySelectorAll(".rm-strip i");
-      pics.forEach((w, i) => { if (cells[i]) cells[i].innerHTML = `<img src="${esc(w.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">`; });
-      card.querySelector(".rm-desc").textContent = about.desc || "";
-    });
-  }
-
   /* ---------- one artist ---------- */
 
   const view = store.get("view", { medium: "all", squares: false, sort: "oldest" });
@@ -395,7 +372,7 @@
     v.innerHTML = `
       <div class="rm-ahead">
         <div>
-          <p class="rm-crumbs"><a href="#artists">my artists</a>${others.length ? " · " + others.slice(-6).map((o) => `<a href="${artistHref(o.name)}">${esc(o.name)}</a>`).join(" · ") : ""}</p>
+          <p class="rm-crumbs"><a href="#pure">pure art</a>${others.length ? " · " + others.slice(-6).map((o) => `<a href="${artistHref(o.name)}">${esc(o.name)}</a>`).join(" · ") : ""}</p>
           <h1>${esc(name)}</h1>
           <p class="rm-why" id="rm-adesc"></p>
         </div>
@@ -430,7 +407,7 @@
       $("rm-anote").addEventListener("input", (e) => { m.note = e.target.value; saveAll(); });
       $("rm-remove").addEventListener("click", () => {
         if (!confirmTwice($("rm-remove"), "click again to remove")) return;
-        mine = mine.filter((x) => x !== m); saveAll(); location.hash = "#artists";
+        mine = mine.filter((x) => x !== m); saveAll(); location.hash = "#pure";
       });
     } else $("rm-addme").addEventListener("click", () => { addArtist(name); showArtist(name); });
     $("rm-toweb").addEventListener("click", () => {
@@ -1371,7 +1348,7 @@
 
     v.querySelectorAll("[data-left]").forEach((b) => b.addEventListener("click", () => { splitLeft = b.dataset.left; showSplit(); }));
     setupSide("L", leftList, splitLeft === "mine" ? "mine" : "art",
-      splitLeft === "mine" ? "nothing tagged " + (R.MY_WORK_TAG || "2026") + " in works.js yet." : `nothing saved yet: open any work in <a href="#artists">1 · other artists</a> and press save.`);
+      splitLeft === "mine" ? "nothing tagged " + (R.MY_WORK_TAG || "2026") + " in works.js yet." : `nothing saved yet: open any work in <a href="#pure">1 · pure art</a> and press save.`);
     setupSide("R", nat, "nature", `nothing saved yet: save photographs in <a href="#nature">1 · real image search</a>.`);
     drawRecent();
   }
@@ -1722,7 +1699,7 @@
     let list = art.filter((w) => !tagFilter || (w.tags || []).includes(tagFilter));
     list = order === "random" ? shuffle(list) : order === "old" ? list : list.slice().reverse();
     v.innerHTML = `
-      <p class="rm-intro">${art.length ? `everything you've saved: ${art.filter((w) => !w.kind).length} works of art, ${art.filter((w) => w.kind === "nature").length} real photographs, ${art.filter((w) => w.kind === "link").length} from outside, ${art.filter((w) => w.kind === "wreck").length} obliterated.` : "nothing saved yet. press + on any picture in step 1 (other artists, pure art, real image search)."}</p>
+      <p class="rm-intro">${art.length ? `everything you've saved: ${art.filter((w) => !w.kind).length} works of art, ${art.filter((w) => w.kind === "nature").length} real photographs, ${art.filter((w) => w.kind === "link").length} from outside, ${art.filter((w) => w.kind === "wreck").length} obliterated.` : "nothing saved yet. press + on any picture in step 1 (pure art, pure images)."}</p>
       <div class="rm-filters">
         <span>order <select id="rm-forder"><option value="new">newest first</option><option value="old">oldest first</option><option value="random">mixed up</option></select></span>
         <span class="rm-why">does something need to be here? add it:</span>
@@ -1777,7 +1754,7 @@
   }
 
   function exportData() {
-    return { room: 4, exported: new Date().toISOString(), mine, dismissed, lineAdds, collection, ideas, commissions, palace, legend, natureTags, colors, combos, lists, share, goals, notes };
+    return { room: 4, exported: new Date().toISOString(), mine, dismissed, lineAdds, collection, ideas, commissions, palace, legend, natureTags, colors, combos, lists, share, goals, notes, books };
   }
 
   function exportAll() {
@@ -1802,6 +1779,7 @@
     dismissed = [...new Set(dismissed.concat(d.dismissed || []))];
     colors = merge(colors, d.colors, "id");
     combos = merge(combos, d.combos, "id");
+    books = merge(books, d.books, "id");
     lists = fresh && d.lists ? d.lists : merge(lists, d.lists, "id");
     goals = merge(goals, d.goals, "id");
     notes = fresh && d.notes ? d.notes : merge(notes, d.notes, "id");
@@ -2142,19 +2120,51 @@
     } catch (e) { return []; }
   }
 
+  /* ---------- PURE ART: your artists + their work, on one page ----------
+     Type an artist at the top: they join your list, the feed fills with their
+     real work, and the "you might love" names change to follow your list. */
+
+  // suggestions from your whole list: hand-made links first, Wikidata after
+  async function suggestionsFor(list, n) {
+    const score = new Map();
+    const bump = (name, pts, because) => {
+      if (!name || isMine(name) || dismissed.some((d) => plain(d) === plain(name))) return;
+      const k = plain(name), c = score.get(k) || { name, pts: 0, because: new Set() };
+      c.pts += pts; c.because.add(because); score.set(k, c);
+    };
+    list.forEach((m) => curatedNear(m.name).forEach((x) => bump(x, 1.5, m.name)));
+    const abouts = await Promise.all(list.map((m) => aboutArtist(m.name).catch(() => ({ by: [], on: [], peers: [] }))));
+    list.forEach((m, i) => {
+      abouts[i].by.forEach((x) => bump(x, 1, m.name));
+      abouts[i].on.forEach((x) => bump(x, 1, m.name));
+      (abouts[i].peers || []).forEach((x) => bump(x, 0.4, m.name));
+    });
+    // the more of your artists someone is near, the higher they go; a little shuffle keeps it fresh
+    return shuffle([...score.values()]).sort((x, y) => (y.because.size + y.pts / 4) - (x.because.size + x.pts / 4)).slice(0, n);
+  }
+
   async function showPure() {
     const v = $("rm-view");
-    const recs = shuffle([...new Set(mine.flatMap((m) => curatedNear(m.name)))].filter((n) => !isMine(n) && !dismissed.some((d) => plain(d) === plain(n)))).slice(0, 4);
     v.innerHTML = `
-      <p class="rm-wide">real work by the artists on your list (and a few you might love), straight from the museums, made ${CUT} or earlier. then leave the site: every artist has a way out to their official site or foundation, wikipedia and galleries. add artists on <a href="#artists">other artists</a>.</p>
-      <div class="rm-pure" id="rm-purelinks">${mine.map((m) => `<div class="rm-purerow" data-name="${esc(m.name)}"><a href="${artistHref(m.name)}">${esc(m.name)}</a> <span class="rm-plinks rm-why"></span></div>`).join("")}
-        ${recs.length ? `<div class="rm-purerow rec"><span class="rm-why">you might love</span> ${recs.map((n) => `<span class="rm-rec"><a href="${artistHref(n)}">${esc(n)}</a> <button type="button" class="rm-why" data-add="${esc(n)}">+</button></span>`).join(" · ")}</div>` : ""}
+      <div class="rm-center">
+        <div id="rm-purebar"></div>
+        <p class="rm-why">add an artist you love. their real work joins the feed below (from museums, made ${CUT} or earlier), and the suggestions change with your list.</p>
+      </div>
+      <div class="rm-pure" id="rm-purelinks">${mine.map((m) => `<div class="rm-purerow" data-name="${esc(m.name)}"><a href="${artistHref(m.name)}">${esc(m.name)}</a> <span class="rm-plinks rm-why"></span> <button type="button" class="rm-del" data-drop="${esc(m.name)}" title="take off my list">×</button></div>`).join("") || `<p class="rm-empty">your list is empty: type an artist above.</p>`}
+        <div class="rm-purerow rec" id="rm-purerecs"><span class="rm-why">you might love …</span></div>
       </div>
       <div class="rm-grid four" id="rm-pgrid"><div class="rm-loading">${"<i></i>".repeat(8)}</div></div>
       <p class="rm-filters"><button type="button" id="rm-pshuffle">shuffle</button></p>`;
-    v.querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", () => { addArtist(b.dataset.add); showPure(); }));
-    $("rm-pshuffle").addEventListener("click", showPure);
 
+    const input = typingBar($("rm-purebar"), { placeholder: "add an artist…", onPick: (name) => { addArtist(name); showPure(); } });
+    input.focus();
+    $("rm-pshuffle").addEventListener("click", showPure);
+    v.querySelectorAll("[data-drop]").forEach((b) => b.addEventListener("click", () => {
+      if (!confirmTwice(b, "take off?")) return;
+      mine = mine.filter((m) => plain(m.name) !== plain(b.dataset.drop)); saveAll(); showPure();
+    }));
+
+    // each artist's ways out: official site / foundation, wikipedia, galleries, museums
     v.querySelectorAll(".rm-purerow[data-name]").forEach(async (row) => {
       const name = row.dataset.name;
       const l = await officialLinks(name);
@@ -2169,14 +2179,278 @@
       if (span) span.innerHTML = links.map(([href, label]) => `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(label)} ↗</a>`).join(" · ");
     });
 
-    const names = mine.map((m) => m.name).concat(recs.slice(0, 2));
-    const lists = await Promise.all(names.map((n) => pureFeedFor(n).then((l) => l.filter((w) => w.thumb).map((w) => recs.includes(n) ? { ...w, rec: true } : w))));
+    // suggestions, from everyone on your list
+    const recs = await suggestionsFor(mine, 6);
+    const recBox = $("rm-purerecs");
+    if (!recBox) return;
+    recBox.innerHTML = recs.length ? `<span class="rm-why">you might love</span> ${recs.map((r) => `<span class="rm-rec" title="near ${esc([...r.because].join(" + "))}"><a href="${artistHref(r.name)}">${esc(r.name)}</a> <button type="button" class="rm-why" data-add="${esc(r.name)}" title="add to my list">+</button><button type="button" class="rm-why" data-no="${esc(r.name)}" title="not for me">×</button></span>`).join(" · ")}` : "";
+    recBox.querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", () => { addArtist(b.dataset.add); showPure(); }));
+    recBox.querySelectorAll("[data-no]").forEach((b) => b.addEventListener("click", () => { dismissed.push(b.dataset.no); saveAll(); b.parentElement.remove(); }));
+
+    // the feed: your artists, plus a little from the top two suggestions
+    const recNames = recs.slice(0, 2).map((r) => r.name);
+    const names = mine.map((m) => m.name).concat(recNames);
+    const lists = await Promise.all(names.map((n) => pureFeedFor(n).then((l) => l.filter((w) => w.thumb).map((w) => recNames.includes(n) ? { ...w, rec: true } : w)).catch(() => [])));
     const grid = $("rm-pgrid");
     if (!grid) return;
     const pools = lists.map((l) => shuffle(l)), mixed = [];
     while (pools.some((p) => p.length) && mixed.length < 80) pools.forEach((p) => { if (p.length) mixed.push(p.pop()); });
     grid.innerHTML = mixed.length ? mixed.map(tileHTML).join("") : `<p class="rm-empty">nothing came back. add an artist above, or check your connection.</p>`;
     wireTiles(grid, mixed);
+  }
+
+  /* ============================================================
+     1 · LIBRARY: your PDFs, read two pages at a time.
+     The PDFs are kept in this browser (IndexedDB, which holds big
+     files), and online under your save code if you have one, so
+     they follow your room to other computers. They are never on
+     the public site.
+     ============================================================ */
+
+  let pdfjsLoading = null;
+  function pdfjs() {
+    return pdfjsLoading || (pdfjsLoading = import(new URL("vendor/pdfjs/pdf.min.mjs", location.href).href).then((m) => {
+      m.GlobalWorkerOptions.workerSrc = new URL("vendor/pdfjs/pdf.worker.min.mjs", location.href).href;
+      return m;
+    }));
+  }
+  const openPdf = (bytes) => pdfjs().then((m) => m.getDocument({ data: bytes, standardFontDataUrl: new URL("vendor/pdfjs/standard_fonts/", location.href).href }).promise);
+
+  // the shelf in this browser
+  let shelfDb = null;
+  function shelf() {
+    return shelfDb || (shelfDb = new Promise((res, rej) => {
+      const r = indexedDB.open("mind-palace-library", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("files");
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    }));
+  }
+  async function shelfDo(mode, fn) {
+    const db = await shelf();
+    return new Promise((res, rej) => { const q = fn(db.transaction("files", mode).objectStore("files")); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+  }
+  const shelfGet = (id) => shelfDo("readonly", (s) => s.get(id));
+  const shelfPut = (id, blob) => shelfDo("readwrite", (s) => s.put(blob, id));
+  const shelfDel = (id) => shelfDo("readwrite", (s) => s.delete(id));
+
+  const fileUrl = (id) => "/api/file/" + encodeURIComponent(share.code) + "/" + encodeURIComponent(id);
+  async function cloudPutBook(b) {
+    if (!share.code) return false;
+    try {
+      const blob = await shelfGet(b.id);
+      if (!blob) return false;
+      const r = await fetch(fileUrl(b.id), { method: "PUT", headers: { "content-type": "application/pdf" }, body: blob });
+      if (r.ok) { b.cloud = true; saveAll(); }
+      return r.ok;
+    } catch (e) { return false; }
+  }
+
+  // the PDF's bytes: from this browser, or from your room online
+  async function bookBlob(b) {
+    let blob = await shelfGet(b.id).catch(() => null);
+    if (!blob && share.code) {
+      try {
+        const r = await fetch(fileUrl(b.id), { cache: "no-store" });
+        if (r.ok) { blob = await r.blob(); shelfPut(b.id, blob).catch(() => {}); }
+      } catch (e) { /* offline */ }
+    }
+    return blob;
+  }
+
+  async function addBooks(files, status) {
+    for (const f of files) {
+      if (!/pdf$/i.test(f.type) && !/\.pdf$/i.test(f.name)) { status(`${f.name} isn't a PDF`); continue; }
+      status(`adding ${f.name}…`);
+      try {
+        const bytes = new Uint8Array(await f.arrayBuffer());
+        const doc = await openPdf(bytes.slice());
+        const meta = await doc.getMetadata().catch(() => ({ info: {} }));
+        const info = meta.info || {};
+        // a small picture of the first page for the shelf
+        const pg = await doc.getPage(1);
+        const vp0 = pg.getViewport({ scale: 1 });
+        const vp = pg.getViewport({ scale: 260 / vp0.width });
+        const cv = document.createElement("canvas");
+        cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
+        await pg.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise;
+        const b = {
+          id: uid(), title: String(info.Title || "").trim() || f.name.replace(/\.pdf$/i, "").replace(/[_-]+/g, " "),
+          author: String(info.Author || "").trim(), pages: doc.numPages, size: f.size, added: today(), page: 1,
+          thumb: cv.toDataURL("image/jpeg", 0.72), cloud: false
+        };
+        await shelfPut(b.id, new Blob([bytes], { type: "application/pdf" }));
+        books.push(b); saveAll();
+        doc.destroy();
+        if (share.code) { status(`putting ${b.title} in your room online…`); await cloudPutBook(b); }
+        status(`added ${b.title}`);
+      } catch (e) {
+        status(`couldn't open ${f.name}` + (e && e.name === "QuotaExceededError" ? ": this browser is out of room" : ""));
+      }
+    }
+  }
+
+  function showLibrary() {
+    const v = $("rm-view");
+    v.innerHTML = `
+      <p class="rm-wide">your library. add a PDF and it stays with your room${share.code ? " (in this browser, and online under your save code)" : " (in this browser; make a save code on your profile and it follows you to other computers)"}. open one to read it two pages at a time.</p>
+      <label class="rm-libdrop" id="rm-libdrop">
+        <input type="file" id="rm-libfile" accept="application/pdf,.pdf" multiple hidden>
+        <b>+ add a PDF</b> <span class="rm-why">or drop one here</span>
+      </label>
+      <p class="rm-status" id="rm-libst"></p>
+      <div class="rm-books">${books.slice().reverse().map((b) => `
+        <div class="rm-book" data-id="${b.id}">
+          <a href="#read/${b.id}" class="rm-cover">${b.thumb ? `<img src="${b.thumb}" alt="">` : `<span class="rm-pencil"><i>${esc(b.title)}</i></span>`}</a>
+          <a href="#read/${b.id}"><b>${esc(b.title)}</b></a>
+          <span class="rm-why">${b.author ? esc(b.author) + " · " : ""}${b.pages} pages${b.page > 1 ? ` · on page ${b.page}` : ""}</span>
+          <span class="rm-row"><button type="button" class="rm-del" data-ren="${b.id}">rename</button><button type="button" class="rm-del" data-del="${b.id}">delete</button></span>
+        </div>`).join("") || `<p class="rm-empty">nothing on the shelf yet.</p>`}</div>`;
+
+    const status = (t) => { const el = $("rm-libst"); if (el) el.textContent = t; };
+    const add = async (files) => { await addBooks([...files], status); if (root.dataset.page === "library" && !location.hash.startsWith("#read/")) { const keep = $("rm-libst") && $("rm-libst").textContent; showLibrary(); status(keep); } };
+    $("rm-libfile").addEventListener("change", (e) => add(e.target.files));
+    const drop = $("rm-libdrop");
+    ["dragenter", "dragover"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+    ["dragleave", "drop"].forEach((t) => drop.addEventListener(t, () => drop.classList.remove("over")));
+    drop.addEventListener("drop", (e) => { e.preventDefault(); add(e.dataTransfer.files); });
+
+    v.querySelectorAll("[data-del]").forEach((btn) => btn.addEventListener("click", async () => {
+      if (!confirmTwice(btn)) return;
+      const id = btn.dataset.del;
+      books = books.filter((b) => b.id !== id); saveAll();
+      await shelfDel(id).catch(() => {});
+      if (share.code) fetch(fileUrl(id), { method: "DELETE" }).catch(() => {});
+      showLibrary();
+    }));
+    v.querySelectorAll("[data-ren]").forEach((btn) => btn.addEventListener("click", () => {
+      const b = books.find((x) => x.id === btn.dataset.ren);
+      const card = btn.closest(".rm-book"), title = card.querySelector("b");
+      title.outerHTML = `<input class="rm-rename" value="${esc(b.title)}">`;
+      const inp = card.querySelector(".rm-rename"); inp.focus(); inp.select();
+      const done = () => { b.title = inp.value.trim() || b.title; saveAll(); showLibrary(); };
+      inp.addEventListener("keydown", (e) => { if (e.key === "Enter") done(); if (e.key === "Escape") showLibrary(); });
+      inp.addEventListener("blur", done);
+    }));
+
+    // books added before you had a save code: put them online now, quietly
+    if (share.code) books.filter((b) => !b.cloud).forEach((b) => cloudPutBook(b));
+  }
+
+  /* ---------- the reader: two pages side by side ---------- */
+
+  const openDocs = new Map();       // books already opened this visit
+  let readerKeys = null;
+
+  async function showBook(id) {
+    const v = $("rm-view");
+    const b = books.find((x) => x.id === id);
+    if (!b) { v.innerHTML = `<p class="rm-empty">that book isn't on your shelf. <a href="#library">back to the library</a></p>`; return; }
+    const opts = store.get("readOpts", { cover: true, single: false, zoom: 1 });
+    v.innerHTML = `
+      <div class="rm-reader">
+        <div class="rm-rtop">
+          <a href="#library">library</a>
+          <span class="rm-rtitle"><b>${esc(b.title)}</b>${b.author ? ` <span class="rm-why">${esc(b.author)}</span>` : ""}</span>
+          <span class="rm-rctl">
+            <button type="button" id="rm-rprev" aria-label="back">‹</button>
+            <span class="rm-why">page <input id="rm-rpage" value="${b.page || 1}" size="3" inputmode="numeric"> of ${b.pages}</span>
+            <button type="button" id="rm-rnext" aria-label="forward">›</button>
+            <button type="button" id="rm-rsingle" class="${opts.single ? "on" : ""}">one page</button>
+            <button type="button" id="rm-rcover" class="${opts.cover ? "on" : ""}" title="the first page sits alone, like a cover, so pages pair up the way the book was printed">cover alone</button>
+            <button type="button" data-z="-1">−</button><button type="button" data-z="1">+</button>
+          </span>
+        </div>
+        <div class="rm-spread" id="rm-spread"><p class="rm-status">opening…</p></div>
+        <input type="range" class="rm-rbar" id="rm-rbar" min="1" max="${b.pages}" value="${b.page || 1}" aria-label="where you are in the book">
+      </div>`;
+
+    let doc = openDocs.get(id);
+    if (!doc) {
+      const blob = await bookBlob(b);
+      if (!$("rm-spread")) return;
+      if (!blob) { $("rm-spread").innerHTML = `<p class="rm-empty">this PDF isn't in this browser${share.code ? " or in your room online" : ""}. add it again on the <a href="#library">library</a> page.</p>`; return; }
+      try { doc = await openPdf(new Uint8Array(await blob.arrayBuffer())); openDocs.set(id, doc); }
+      catch (e) { $("rm-spread").innerHTML = `<p class="rm-empty">couldn't open this PDF.</p>`; return; }
+    }
+    if (location.hash !== "#read/" + id) return;
+
+    const N = doc.numPages;
+    const narrow = () => window.innerWidth < 760;
+    // which pages sit together: [1], [2, 3], [4, 5] … (cover alone) or [1, 2], [3, 4] …
+    const spreadOf = (p) => {
+      if (opts.single || narrow()) return [p];
+      const first = opts.cover ? (p === 1 ? 1 : p % 2 === 0 ? p : p - 1) : (p % 2 === 1 ? p : p - 1);
+      return opts.cover && first === 1 ? [1] : [first, first + 1].filter((x) => x <= N);
+    };
+    let cur = Math.min(Math.max(1, b.page || 1), N);
+    let tasks = [];
+    const draw = async () => {
+      const box = $("rm-spread");
+      if (!box) return;
+      const pages = spreadOf(cur);
+      cur = pages[0];
+      tasks.forEach((t) => { try { t.cancel(); } catch (e) {} });
+      tasks = [];
+      box.className = "rm-spread n" + pages.length + (opts.cover && pages[0] === 1 && pages.length === 1 && !opts.single && !narrow() ? " cover" : "");
+      box.innerHTML = pages.map((n) => `<figure class="rm-pg" data-n="${n}"><canvas></canvas><figcaption>${n}</figcaption></figure>`).join("");
+      const availH = Math.max(320, window.innerHeight - box.getBoundingClientRect().top - 70);
+      const availW = (box.clientWidth - 2 * (pages.length - 1)) / (opts.cover && pages.length === 1 && !opts.single && !narrow() ? 2 : pages.length);
+      const dpr = Math.min(2.5, window.devicePixelRatio || 1);
+      await Promise.all(pages.map(async (n, i) => {
+        const page = await doc.getPage(n);
+        const vp1 = page.getViewport({ scale: 1 });
+        const scale = Math.min(availH / vp1.height, availW / vp1.width) * opts.zoom;
+        const vp = page.getViewport({ scale: scale * dpr });
+        const cv = box.querySelectorAll("canvas")[i];
+        if (!cv) return;
+        cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
+        cv.style.width = Math.round(vp.width / dpr) + "px"; cv.style.height = Math.round(vp.height / dpr) + "px";
+        const t = page.render({ canvasContext: cv.getContext("2d"), viewport: vp });
+        tasks.push(t);
+        try { await t.promise; } catch (e) { /* turned the page before it finished */ }
+      }));
+      $("rm-rpage").value = cur;
+      $("rm-rbar").value = cur;
+      if (b.page !== cur) { b.page = cur; saveAll(); }
+      // read ahead: get the next pages ready
+      spreadOf(Math.min(N, pages[pages.length - 1] + 1)).forEach((n) => doc.getPage(n).catch(() => {}));
+    };
+    const go = (p) => { p = Math.min(Math.max(1, p | 0), N); if (spreadOf(p)[0] === spreadOf(cur)[0] && p === cur) return; cur = p; draw(); };
+    const next = () => { const s = spreadOf(cur); if (s[s.length - 1] < N) go(s[s.length - 1] + 1); };
+    const prev = () => { const s = spreadOf(cur); if (s[0] > 1) go(spreadOf(s[0] - 1)[0]); };
+
+    $("rm-rnext").addEventListener("click", next);
+    $("rm-rprev").addEventListener("click", prev);
+    $("rm-rpage").addEventListener("change", (e) => go(+e.target.value));
+    $("rm-rbar").addEventListener("input", (e) => { $("rm-rpage").value = e.target.value; });
+    $("rm-rbar").addEventListener("change", (e) => go(+e.target.value));
+    $("rm-rsingle").addEventListener("click", (e) => { opts.single = !opts.single; e.target.classList.toggle("on", opts.single); store.set("readOpts", opts); draw(); });
+    $("rm-rcover").addEventListener("click", (e) => { opts.cover = !opts.cover; e.target.classList.toggle("on", opts.cover); store.set("readOpts", opts); draw(); });
+    v.querySelectorAll(".rm-rctl [data-z]").forEach((btn) => btn.addEventListener("click", () => {
+      opts.zoom = Math.min(3, Math.max(0.5, opts.zoom * (+btn.dataset.z > 0 ? 1.2 : 1 / 1.2))); store.set("readOpts", opts); draw();
+    }));
+    // click the left page to go back, the right page to go forward
+    $("rm-spread").addEventListener("click", (e) => {
+      const fig = e.target.closest(".rm-pg");
+      if (!fig) return;
+      const r = fig.getBoundingClientRect();
+      const pages = spreadOf(cur);
+      if (pages.length === 2) (+fig.dataset.n === pages[0] ? prev : next)();
+      else (e.clientX < r.left + r.width / 2 ? prev : next)();
+    });
+    if (readerKeys) document.removeEventListener("keydown", readerKeys);
+    readerKeys = (e) => {
+      if (!location.hash.startsWith("#read/")) { document.removeEventListener("keydown", readerKeys); readerKeys = null; return; }
+      if (e.target.closest("input, textarea")) return;
+      if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); next(); }
+      if (e.key === "ArrowLeft") { e.preventDefault(); prev(); }
+    };
+    document.addEventListener("keydown", readerKeys);
+    let rt;
+    const onResize = () => { if (!location.hash.startsWith("#read/" + id)) return window.removeEventListener("resize", onResize); clearTimeout(rt); rt = setTimeout(draw, 150); };
+    window.addEventListener("resize", onResize);
+    draw();
   }
 
   /* ============================================================
@@ -2346,15 +2620,16 @@
 
   function showBank() {
     const v = $("rm-view");
-    const sorted = colors.slice().sort((a, b) => { const A = hexToHsl(a.hex), B = hexToHsl(b.hex); return (A.s < 0.1) - (B.s < 0.1) || A.h - B.h || A.l - B.l; });
+    const sorted = shuffle(colors);   // no rainbow order: colors land next to colors they wouldn't otherwise meet
     v.innerHTML = `
-      <div class="rm-banktop"><span class="rm-why">${colors.length} colors</span><button type="button" id="rm-move">move the colors around →</button></div>
+      <div class="rm-banktop"><span class="rm-why">${colors.length} colors</span><button type="button" id="rm-roll" class="rm-dice" title="roll: move every color somewhere new">⚄ roll</button><button type="button" id="rm-move">move the colors around →</button></div>
       ${sorted.length
         ? `<div class="rm-bank" id="rm-bank">${sorted.map((c) => `<button type="button" data-id="${c.id}" data-hex="${esc(c.hex)}" style="background:${esc(c.hex)}" aria-label="${esc(c.hex)}"></button>`).join("")}</div>`
         : `<p class="rm-empty">the bank is empty. pick colors in the <a href="#picker">color picker</a> or <a href="#split">splitscreen</a>.</p>`}
       <div class="rm-hexchip" id="rm-hexchip" hidden></div>
       <div class="rm-pop" id="rm-pop" hidden></div>`;
     $("rm-move").addEventListener("click", openMachine);
+    $("rm-roll").addEventListener("click", rollBank);
     const chip = $("rm-hexchip"), pop = $("rm-pop");
     v.querySelectorAll("#rm-bank button").forEach((b) => {
       b.addEventListener("mouseenter", () => { const r = b.getBoundingClientRect(); chip.textContent = b.dataset.hex; chip.style.left = r.left + r.width / 2 + "px"; chip.style.top = r.top - 4 + "px"; chip.hidden = false; });
@@ -2376,6 +2651,23 @@
         del.addEventListener("click", () => { if (!confirmTwice(del)) return; colors = colors.filter((x) => x.id !== c.id); saveAll(); showBank(); });
       });
     });
+  }
+
+  // the dice: every box slides to a new random place
+  function rollBank() {
+    const box = $("rm-bank");
+    if (!box) return;
+    const kids = [...box.children];
+    const before = new Map(kids.map((k) => [k, k.getBoundingClientRect()]));
+    shuffle(kids).forEach((k) => box.appendChild(k));
+    kids.forEach((k) => {
+      const a = before.get(k), b = k.getBoundingClientRect();
+      const dx = a.left - b.left, dy = a.top - b.top;
+      if (!dx && !dy) return;
+      k.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }], { duration: 450 + Math.random() * 300, easing: "cubic-bezier(.2,.7,.2,1)" });
+    });
+    const d = $("rm-roll");
+    if (d) { const faces = "⚀⚁⚂⚃⚄⚅"; d.textContent = faces[Math.floor(Math.random() * 6)] + " roll"; }
   }
 
   // the color machine, in a pop-up over the page (like a picture opening big)
