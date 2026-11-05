@@ -1016,3 +1016,8 @@ html.grid-always .room :is(.rm-panel, .rm-pop, .rm-cpop, .rm-drop, .rm-suggest, 
 /* pictures and colors sit straight on the grid */
 html.grid-always .room :is(.rm-grid, .rm-bank, .rm-swatches, .rm-strip, .rm-spread) { background: transparent; }
 html.grid-always .room .rm-pic, html.grid-always .room .rm-strip i { background: rgba(250, 250, 250, 0.85); }
+
+/* home + blog: plain links at the top of the menu, above the four steps */
+.menu-link { color: var(--text); }
+.menu-link.current { text-decoration: underline; text-underline-offset: 3px; }
+.menu-link + .menu-step { margin-top: 6px; }

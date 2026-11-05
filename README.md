@@ -1,6 +1,7 @@
-# + (the plus platform, working name mind palace)
+# + studio blog project
 
-A research room for artists and curious people, in four steps of making something.
+A studio blog for artists: share what you're working on (pictures, words, now listening / watching / reading, colors, how an idea is growing), with a research room behind it in four steps of making something.
+The menu: home, blog, then the four steps.
 The menu runs down the left column:
 
 1. **remembering** — inspiration list, images (one search bar: artists from any time, places, things; one feed of real art + real photographs, built from your inspiration list), library (your PDFs, read two pages at a time)

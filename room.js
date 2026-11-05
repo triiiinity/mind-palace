@@ -272,14 +272,14 @@
     { n: 3, label: "creating", line: "now you should have an idea", pages: [["bank", "color bank"], ["ideas", "idea board"], ["order", "order of operations"]] },
     { n: 4, label: "posting", line: "your studio, as it goes", pages: [["share", "profile"]] }
   ];
-  const PAGES = STEPS.flatMap((st) => st.pages.map(([k]) => k)).concat("home", "visit");
+  const PAGES = STEPS.flatMap((st) => st.pages.map(([k]) => k)).concat("home", "visit", "blog");
   // pages that were folded into others, so old links still land somewhere
   const MOVED = { pure: "images", nature: "images", artists: "images", collection: "images", obliterate: "split", progress: "order", notes: "share" };
   // the way through, start to finish (the little "next" line at the bottom of each page)
-  const TRAIL = ["bin", "images", "picker", "split", "bank", "ideas", "order", "share"];
+  const TRAIL = ["bin", "images", "picker", "split", "bank", "ideas", "order", "blog"];
   const TRAIL_WHY = { bin: "write down what inspires you", images: "see real art and real pictures of it", picker: "pick the colors out", split: "put art and the world side by side",
-    bank: "your colors, all together", ideas: "plant an idea", order: "list the steps; each one waters it", share: "post what you made" };
-  const LABEL = Object.fromEntries(STEPS.flatMap((st) => st.pages));
+    bank: "your colors, all together", ideas: "plant an idea", order: "list the steps; each one waters it", blog: "show people what you're working on" };
+  const LABEL = Object.assign(Object.fromEntries(STEPS.flatMap((st) => st.pages)), { blog: "blog", home: "home" });
 
   root.innerHTML = `
     <section id="rm-view"></section>
@@ -327,7 +327,7 @@
     if (isArtist) showArtist(h.slice(7));
     else if (isBook) showBook(h.slice(5));
     else ({ home: showHome, images: showImages, library: showLibrary, picker: showPicker, bank: showBank, order: showOrder, share: showShare,
-            split: showSplit, bin: showBin, ideas: showIdeas, visit: showVisit })[page]();
+            split: showSplit, bin: showBin, ideas: showIdeas, visit: showVisit, blog: showBlog })[page]();
     drawTrail(page);
     closeMachine();
     drawGarden();
@@ -2715,10 +2715,190 @@
      you right now, and progress posts.
      ============================================================ */
 
+  /* ============================================================
+     THE BLOG: the heart of the site. Share what you're working on:
+     pictures, words, what you're listening to / watching / reading,
+     colors you've been collecting, and how an idea is growing.
+
+     Pictures are kept like the library's PDFs: in this browser
+     (IndexedDB holds a lot) and online under your save code, so
+     they don't fill up the browser's small storage.
+     ============================================================ */
+
+  const NOW_KINDS = [["listening", "♪"], ["watching", "▶"], ["reading", "❏"], ["loving", "♥"], ["making", "✎"]];
+  const picUrls = new Map();          // picture id → a URL the page can show
+
+  async function savePic(file) {
+    const blob = await new Promise((ok, no) => {
+      const img = new Image();
+      img.onload = () => {
+        const s = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(img.src);
+        c.toBlob((b) => b ? ok(b) : no(new Error("no picture")), "image/jpeg", 0.86);
+      };
+      img.onerror = no;
+      img.src = URL.createObjectURL(file);
+    });
+    const id = "p" + uid();
+    await shelfPut(id, blob);
+    picUrls.set(id, URL.createObjectURL(blob));
+    if (share.code) fetch(fileUrl(id), { method: "PUT", headers: { "content-type": "image/jpeg" }, body: blob }).catch(() => {});
+    return "pic:" + id;
+  }
+  // put the real pictures into every <img data-pic> on the page
+  function showPics(box) {
+    box.querySelectorAll("img[data-pic]").forEach(async (im) => {
+      const id = im.dataset.pic;
+      if (!picUrls.has(id)) {
+        let blob = await shelfGet(id).catch(() => null);
+        if (!blob && share.code) {
+          try { const r = await fetch(fileUrl(id)); if (r.ok) { blob = await r.blob(); shelfPut(id, blob).catch(() => {}); } } catch (e) {}
+        }
+        if (!blob) { im.replaceWith(Object.assign(document.createElement("span"), { className: "rm-vblank" })); return; }
+        picUrls.set(id, URL.createObjectURL(blob));
+      }
+      im.src = picUrls.get(id);
+    });
+  }
+  const picsOf = (p) => p.images || (p.img ? [p.img] : []);
+  const picTag = (src, i) => /^pic:/.test(src) ? `<img data-pic="${esc(src.slice(4))}" data-i="${i}" alt="">` : `<img src="${esc(src)}" data-i="${i}" alt="" referrerpolicy="no-referrer">`;
+  const niceDate = (d) => { const t = new Date((d || "") + "T12:00"); return isNaN(t) ? esc(d || "") : t.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }).toLowerCase(); };
+
+  // one post, the same on the blog and in the visitor's view
+  function postHTML(p, editable) {
+    const pics = picsOf(p);
+    const idea = p.idea;
+    return `<article class="rm-bpost" data-id="${esc(p.id)}">
+      <header><span class="rm-why">${niceDate(p.date)}</span>${p.title ? `<h3>${esc(p.title)}</h3>` : ""}</header>
+      ${pics.length ? `<div class="rm-bpics n${Math.min(pics.length, 4)}">${pics.map(picTag).join("")}</div>` : ""}
+      ${p.text ? `<div class="rm-btext">${esc(p.text).split(/\n{2,}/).map((para) => `<p>${para.replace(/\n/g, "<br>")}</p>`).join("")}</div>` : ""}
+      ${(p.now || []).filter((n) => n.title).length ? `<ul class="rm-bnow">${p.now.filter((n) => n.title).map((n) => { const k = NOW_KINDS.find((x) => x[0] === n.kind) || ["", "·"]; return `<li><span class="rm-nowicon">${k[1]}</span> <span class="rm-why">now ${esc(n.kind)}</span> ${esc(n.title)}</li>`; }).join("")}</ul>` : ""}
+      ${(p.colors || []).length ? `<div class="rm-bcolors">${p.colors.map((h) => `<i style="background:${esc(h)}" title="${esc(h)}"></i>`).join("")}</div>` : ""}
+      ${idea ? `<div class="rm-bidea"><pre class="rm-plant">${idea.art || ""}</pre><div><span class="rm-why">working on</span><br><b>${esc(idea.title || "an idea")}</b><br><span class="rm-why">${esc(idea.line || "")}</span></div></div>` : ""}
+      ${editable ? `<footer><button type="button" class="rm-del" data-edit="${esc(p.id)}">edit</button><button type="button" class="rm-del" data-pdel="${esc(p.id)}">delete</button></footer>` : ""}
+    </article>`;
+  }
+  function wirePosts(box, list) {
+    showPics(box);
+    // click a picture: see it big (arrows go through that post's pictures)
+    box.querySelectorAll(".rm-bpics").forEach((g) => g.addEventListener("click", (e) => {
+      const im = e.target.closest("img"); if (!im || typeof openLightbox !== "function") return;
+      const p = list.find((x) => x.id === g.closest(".rm-bpost").dataset.id);
+      const imgs = [...g.querySelectorAll("img")];
+      openLightbox(imgs.map((x) => ({ file: x.src, title: p.title || niceDate(p.date), tagList: [] })), +im.dataset.i);
+    }));
+  }
+
+  // what you're writing right now (kept if you leave the page)
+  let draft = store.get("blogDraft", null);
+  const newDraft = () => ({ id: "", title: "", text: "", images: [], now: [], colors: [], ideaId: "" });
+
+  function showBlog() {
+    const v = $("rm-view");
+    const fromIdea = store.get("postDraft", null);
+    if (!draft) draft = newDraft();
+    if (fromIdea) { draft.title = draft.title || fromIdea.title; draft.text = draft.text || fromIdea.text; draft.ideaId = fromIdea.ideaId || draft.ideaId; store.set("postDraft", null); }
+    const posts = share.posts.slice().sort((a, b) => (b.date || "").localeCompare(a.date || "") || share.posts.indexOf(b) - share.posts.indexOf(a));
+    const lastNow = Object.fromEntries((share.now || []).map((n) => [String(n.label || "").replace(/^now\s+/, ""), n.title]));
+    const bank = [...new Set(colors.slice().reverse().map((c) => c.hex))].slice(0, 40);
+    v.innerHTML = `
+      <div class="rm-blog">
+        <div class="rm-bhead"><h1>${esc(share.roomName || "my room")}</h1><span class="rm-why">studio blog · ${posts.length} post${posts.length === 1 ? "" : "s"} · <a href="#visit">as a visitor sees it →</a></span></div>
+
+        <form class="rm-compose" id="rm-compose" autocomplete="off">
+          <input name="title" placeholder="title (or don't)" value="${esc(draft.title)}">
+          <textarea name="text" rows="4" placeholder="what's happening in the studio?">${esc(draft.text)}</textarea>
+          <div class="rm-cpics" id="rm-cpics">${draft.images.map((src, i) => `<span class="rm-cpic">${picTag(src, i)}<button type="button" data-unpic="${i}" aria-label="take out">×</button></span>`).join("")}
+            <label class="rm-cadd" title="add pictures (or drop them here, or paste)">+<input type="file" id="rm-cfile" accept="image/*" multiple hidden></label></div>
+          <div class="rm-cnow">${draft.now.map((n, i) => { const k = NOW_KINDS.find((x) => x[0] === n.kind); return `<label class="rm-cnowrow"><span class="rm-nowicon">${k ? k[1] : "·"}</span> now ${esc(n.kind)} <input data-now="${i}" value="${esc(n.title)}" placeholder="${esc(lastNow[n.kind] || "")}"><button type="button" class="rm-del" data-unnow="${i}">×</button></label>`; }).join("")}</div>
+          ${draft.showColors ? `<div class="rm-cbank">${bank.length ? bank.map((h) => `<button type="button" data-hex="${esc(h)}" style="--c:${esc(h)}" class="${draft.colors.includes(h) ? "on" : ""}" title="${esc(h)}"></button>`).join("") : `<span class="rm-why">no colors yet: pick some in the <a href="#picker">color picker</a>.</span>`}</div>` : ""}
+          ${draft.colors.length ? `<div class="rm-bcolors small">${draft.colors.map((h) => `<i style="background:${esc(h)}"></i>`).join("")}</div>` : ""}
+          ${draft.showIdea || draft.ideaId ? `<select id="rm-cidea"><option value="">no idea attached</option>${ideas.filter((i) => !i.harvested || true).map((i) => `<option value="${i.id}"${draft.ideaId === i.id ? " selected" : ""}>${esc(i.title || "untitled idea")} · ${PLANT_NAMES[plantOf(i).stage]}</option>`).join("")}</select>` : ""}
+          <div class="rm-cbar">
+            <span class="rm-cadds">${NOW_KINDS.map(([k, icon]) => `<button type="button" data-addnow="${k}">${icon} ${k}</button>`).join("")}<button type="button" id="rm-ccolors" class="${draft.showColors ? "on" : ""}">■ colors</button><button type="button" id="rm-cideabtn" class="${draft.showIdea || draft.ideaId ? "on" : ""}">✿ an idea</button></span>
+            <span class="rm-status" id="rm-cst"></span>
+            ${draft.id ? `<button type="button" class="rm-del" id="rm-cancel">cancel edit</button>` : ""}
+            <button type="submit" class="rm-btn">${draft.id ? "update" : "post"}</button>
+          </div>
+        </form>
+
+        <div class="rm-bfeed" id="rm-bfeed">${posts.map((p) => postHTML(p, true)).join("") || `<p class="rm-empty">your first post goes here. a picture of the wall, what you're listening to, half a thought: it all counts.</p>`}</div>
+      </div>`;
+
+    const form = $("rm-compose"), st = $("rm-cst");
+    const keep = () => store.set("blogDraft", draft);
+    form.title.addEventListener("input", (e) => { draft.title = e.target.value; keep(); });
+    form.text.addEventListener("input", (e) => { draft.text = e.target.value; keep(); e.target.style.height = "auto"; e.target.style.height = Math.max(96, e.target.scrollHeight + 2) + "px"; });
+    showPics($("rm-cpics"));
+
+    // pictures: the + button, dropping files anywhere on the box, or pasting
+    const addFiles = async (files) => {
+      const imgs = [...files].filter((f) => /^image\//.test(f.type));
+      if (!imgs.length) return;
+      st.textContent = `adding ${imgs.length} picture${imgs.length === 1 ? "" : "s"}…`;
+      for (const f of imgs) { try { draft.images.push(await savePic(f)); } catch (e) { st.textContent = "a picture didn't open"; } }
+      keep(); st.textContent = ""; showBlog();
+    };
+    $("rm-cfile").addEventListener("change", (e) => addFiles(e.target.files));
+    ["dragenter", "dragover"].forEach((t) => form.addEventListener(t, (e) => { e.preventDefault(); form.classList.add("over"); }));
+    ["dragleave", "drop"].forEach((t) => form.addEventListener(t, () => form.classList.remove("over")));
+    form.addEventListener("drop", (e) => { e.preventDefault(); addFiles(e.dataTransfer.files); });
+    form.addEventListener("paste", (e) => { const f = [...(e.clipboardData || {}).files || []]; if (f.length) { e.preventDefault(); addFiles(f); } });
+    v.querySelectorAll("[data-unpic]").forEach((b) => b.addEventListener("click", () => { draft.images.splice(+b.dataset.unpic, 1); keep(); showBlog(); }));
+
+    // now listening / watching / reading / loving / making
+    v.querySelectorAll("[data-addnow]").forEach((b) => b.addEventListener("click", () => { draft.now.push({ kind: b.dataset.addnow, title: "" }); keep(); showBlog(); const all = v.querySelectorAll("[data-now]"); const last = $("rm-view").querySelectorAll("[data-now]"); if (last.length) last[last.length - 1].focus(); }));
+    v.querySelectorAll("[data-now]").forEach((inp) => inp.addEventListener("input", () => { draft.now[+inp.dataset.now].title = inp.value; keep(); }));
+    v.querySelectorAll("[data-unnow]").forEach((b) => b.addEventListener("click", () => { draft.now.splice(+b.dataset.unnow, 1); keep(); showBlog(); }));
+
+    // colors from the bank, and an idea from the idea board
+    $("rm-ccolors").addEventListener("click", () => { draft.showColors = !draft.showColors; keep(); showBlog(); });
+    v.querySelectorAll(".rm-cbank [data-hex]").forEach((b) => b.addEventListener("click", () => {
+      const h = b.dataset.hex; draft.colors = draft.colors.includes(h) ? draft.colors.filter((x) => x !== h) : draft.colors.concat(h); keep(); showBlog();
+    }));
+    $("rm-cideabtn").addEventListener("click", () => { draft.showIdea = !(draft.showIdea || draft.ideaId); if (!draft.showIdea) draft.ideaId = ""; keep(); showBlog(); });
+    if ($("rm-cidea")) $("rm-cidea").addEventListener("change", (e) => { draft.ideaId = e.target.value; keep(); });
+    if ($("rm-cancel")) $("rm-cancel").addEventListener("click", () => { draft = newDraft(); keep(); showBlog(); });
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const text = draft.text.trim(), title = draft.title.trim();
+      const now = draft.now.map((n) => ({ kind: n.kind, title: n.title.trim() })).filter((n) => n.title);
+      if (!text && !title && !draft.images.length && !now.length) { st.textContent = "write something or add a picture first"; return; }
+      // an idea is saved as it looks today, so the post shows how far along it was
+      const i = draft.ideaId && ideas.find((x) => x.id === draft.ideaId);
+      const idea = i ? { id: i.id, title: i.title, art: plantHTML(i).replace(/^<pre[^>]*>|<\/pre>$/g, ""), line: (() => { const pl = plantOf(i); return PLANT_NAMES[pl.stage] + (pl.total ? ` · ${pl.done} of ${pl.total} steps` : ""); })() } : null;
+      const old = draft.id && share.posts.find((p) => p.id === draft.id);
+      const post = { id: draft.id || uid(), date: old ? old.date : today(), title, text, images: draft.images.slice(), now, colors: draft.colors.slice(), idea: idea || (old ? old.idea : null) };
+      if (old) share.posts[share.posts.indexOf(old)] = post; else share.posts.push(post);
+      // the newest "now" becomes your room's current now listening / watching…
+      now.forEach((n) => { const k = "now " + n.kind, row = share.now.find((x) => x.label === k); if (row) row.title = n.title; else share.now.push({ label: k, title: n.title }); });
+      if (i) i.watered = Date.now();
+      saveAll();
+      draft = newDraft(); keep(); showBlog();
+    });
+
+    const feed = $("rm-bfeed");
+    wirePosts(feed, posts);
+    feed.querySelectorAll("[data-pdel]").forEach((b) => b.addEventListener("click", () => {
+      if (!confirmTwice(b)) return;
+      const p = share.posts.find((x) => x.id === b.dataset.pdel);
+      share.posts = share.posts.filter((x) => x !== p); saveAll();
+      picsOf(p).filter((s) => /^pic:/.test(s)).forEach((s) => { shelfDel(s.slice(4)).catch(() => {}); if (share.code) fetch(fileUrl(s.slice(4)), { method: "DELETE" }).catch(() => {}); });
+      showBlog();
+    }));
+    feed.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => {
+      const p = share.posts.find((x) => x.id === b.dataset.edit);
+      draft = { id: p.id, title: p.title || "", text: p.text || "", images: picsOf(p).slice(), now: (p.now || []).map((n) => ({ ...n })), colors: (p.colors || []).slice(), ideaId: p.idea ? p.idea.id : "" };
+      keep(); showBlog(); window.scrollTo(0, 0);
+    }));
+  }
+
   function showShare() {
     const v = $("rm-view");
-    const posts = share.posts.slice().reverse();
-    const draft = store.get("postDraft", null);
     v.innerHTML = `
       <div class="rm-profile">
         <input id="rm-rname" class="rm-roomtitle" value="${esc(share.roomName)}" placeholder="name your room" aria-label="your room's name">
@@ -2729,14 +2909,8 @@
           <span class="rm-why" id="rm-cloudst">${esc(cloudState || (store.get("cloudAt", 0) ? "last saved " + new Date(store.get("cloudAt")).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).toLowerCase() : ""))}</span>
           <p class="rm-row rm-backrow rm-why"><button type="button" id="rm-dlback">download a backup</button> · <label class="rm-file">restore a backup<input type="file" id="rm-import" accept=".json" hidden></label> · <a href="#visit">see your room as a visitor →</a></p>
         </div>
-        <form id="rm-post" class="rm-postform rm-postbox">
-          <input name="title" placeholder="title" value="${esc(draft ? draft.title : "")}">
-          <textarea name="text" rows="5" aria-label="post">${esc(draft ? draft.text : "")}</textarea>
-          <p class="rm-row"><label class="rm-file">+ picture<input type="file" name="file" accept="image/*" hidden></label> <span class="rm-why">or</span> <input name="src" placeholder="an image link" size="22"> <button type="submit" class="rm-btn">post</button> <span class="rm-status" id="rm-pstat"></span></p>
-        </form>
-        <div class="rm-posts">${posts.map((p) => `<article class="rm-post" data-id="${p.id}">${p.img ? `<img src="${esc(p.img)}" alt="" referrerpolicy="no-referrer">` : ""}<div><span class="rm-why">${esc(p.date)}</span><br>${p.title ? `<b>${esc(p.title)}</b>` : ""}${p.text ? `<p>${esc(p.text).replace(/\n/g, "<br>")}</p>` : ""}<button type="button" class="rm-del">delete</button></div></article>`).join("")}</div>
+        <p class="rm-why">write posts on your <a href="#blog">blog</a>.</p>
       </div>`;
-    if (draft) store.set("postDraft", null);
     if ($("rm-savenow")) $("rm-savenow").addEventListener("click", () => { $("rm-cloudst").textContent = "saving…"; cloudSave(); });
     if ($("rm-makecode")) $("rm-makecode").addEventListener("click", () => { share.code = makeCode(share.roomName.replace(/'s room$/i, "")); store.set("setup", true); saveAll(); cloudSave(); showShare(); });
     $("rm-dlback").addEventListener("click", exportAll);
@@ -2744,23 +2918,6 @@
     $("rm-rname").addEventListener("input", (e) => { share.roomName = e.target.value; saveAll(); });
     // the secret moved here: click your room's name three times for the instagram follower counts
     $("rm-rname").addEventListener("click", (e) => { if (e.detail === 3) openFollowers(); });
-    const form = $("rm-post");
-    form.file.addEventListener("change", () => { $("rm-pstat").textContent = form.file.files[0] ? form.file.files[0].name : ""; });
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      let img = form.src.value.trim();
-      if (form.file.files[0]) { try { img = await resizeImage(form.file.files[0]); } catch (err) { $("rm-pstat").textContent = "that picture didn't open"; return; } }
-      const title = form.title.value.trim(), text = form.text.value.trim();
-      if (!title && !text && !img) { $("rm-pstat").textContent = "write something or add a picture first"; return; }
-      share.posts.push({ id: uid(), date: today(), title, text, img });
-      saveAll();
-      if (store.get("share", {}).posts.length !== share.posts.length) { share.posts.pop(); $("rm-pstat").textContent = "the browser is out of room: try a smaller picture, or a link"; return; }
-      showShare();
-    });
-    v.querySelectorAll(".rm-post .rm-del").forEach((b) => b.addEventListener("click", () => {
-      if (!confirmTwice(b)) return;
-      share.posts = share.posts.filter((p) => p.id !== b.closest(".rm-post").dataset.id); saveAll(); showShare();
-    }));
   }
 
   /* ---------- a visitor's view of a room (a preview: nobody else can see rooms yet) ----------
@@ -2774,17 +2931,16 @@
     const monthName = (m) => { const d = new Date(m + "-15T12:00"); return isNaN(d) ? "undated" : d.toLocaleString("en-US", { month: "long", year: "numeric" }).toLowerCase(); };
     const strip = colors.slice(-60).map((c) => c.hex);
     v.innerHTML = `
-      <p class="rm-visitnote rm-why">a preview of your room the way a visitor would see it. nobody else can see it yet. <a href="#share">← back to your profile</a></p>
+      <p class="rm-visitnote rm-why">a preview of your room the way a visitor would see it. nobody else can see it yet. <a href="#blog">← back to your blog</a></p>
       <div class="rm-visit">
         <h1 class="rm-vname">${esc(share.roomName || "my room")}</h1>
         <p class="rm-why">${posts.length} post${posts.length === 1 ? "" : "s"}${posts.length ? ` · since ${esc(monthName(posts[posts.length - 1].date.slice(0, 7)))}` : ""}</p>
+        ${(share.now || []).filter((n) => n.title).length ? `<ul class="rm-bnow">${share.now.filter((n) => n.title).map((n) => { const kind = String(n.label || "").replace(/^now\s+/, ""); const k = NOW_KINDS.find((x) => x[0] === kind) || ["", "·"]; return `<li><span class="rm-nowicon">${k[1]}</span> <span class="rm-why">now ${esc(kind)}</span> ${esc(n.title)}</li>`; }).join("")}</ul>` : ""}
         ${strip.length ? `<div class="rm-vcolors" title="colors collected">${strip.map((h) => `<i style="background:${esc(h)}"></i>`).join("")}</div>` : ""}
-        <div class="rm-archive">${months.map((g) => `
-          <section><h4>${esc(monthName(g.m))}</h4>
-            ${g.posts.map((p) => `<article class="rm-vpost${p.img ? "" : " words"}">${p.img ? `<img src="${esc(p.img)}" alt="" referrerpolicy="no-referrer">` : ""}
-              <div><span class="rm-why">${esc(p.date)}</span>${p.title ? `<h3>${esc(p.title)}</h3>` : ""}${p.text ? `<p>${esc(p.text).replace(/\n/g, "<br>")}</p>` : ""}</div></article>`).join("")}
-          </section>`).join("") || `<p class="rm-empty">no posts yet: a visitor would see an empty room. post something on your <a href="#share">profile</a>.</p>`}</div>
+        <div class="rm-archive" id="rm-archive">${months.map((g) => `
+          <section><h4>${esc(monthName(g.m))}</h4>${g.posts.map((p) => postHTML(p, false)).join("")}</section>`).join("") || `<p class="rm-empty">no posts yet: a visitor would see an empty room. write one on your <a href="#blog">blog</a>.</p>`}</div>
       </div>`;
+    if ($("rm-archive")) wirePosts($("rm-archive"), posts);
   }
 
   /* ============================================================
@@ -2912,7 +3068,7 @@
             <input class="rm-ititle" value="${esc(i.title)}" placeholder="working title">
             <p class="rm-why rm-iline">${plantLine(i)}</p>
             ${pl.stage === 5 ? `<button type="button" class="rm-btn" data-harvest="1">harvest it</button>` : ""}
-            ${pl.stage === 6 ? `<a href="#share" data-postit="1">post it to your room →</a>` : ""}
+            ${pl.stage === 6 ? `<a href="#blog" data-postit="1">post it on your blog →</a>` : ""}
           </div></div>
           <div class="rm-states">${IDEA_STATES.map((s) => `<button type="button" data-s="${s}" class="${i.status === s ? "on" : ""}">${s}</button>`).join("")}</div>
           <div class="rm-icolors"><span class="rm-why">flower</span>${flowerChoices().map((h) => `<button type="button" data-petal="${esc(h)}" style="--c:${esc(h)}" class="${petalOf(i) === h ? "on" : ""}" title="${esc(h)}"></button>`).join("")}</div>
@@ -2948,7 +3104,7 @@
       }));
       card.querySelectorAll("[data-petal]").forEach((b) => b.addEventListener("click", () => { i.color = b.dataset.petal; saveAll(); showIdeas(); }));
       const pi = card.querySelector("[data-postit]");
-      if (pi) pi.addEventListener("click", () => { store.set("postDraft", { title: i.title || "", text: i.notes || "" }); });
+      if (pi) pi.addEventListener("click", () => { store.set("postDraft", { title: i.title || "", text: i.notes || "", ideaId: i.id }); });
       const hv = card.querySelector("[data-harvest]");
       if (hv) hv.addEventListener("click", () => { i.harvested = today(); i.status = "done"; saveAll(); showIdeas(); });
       card.querySelectorAll(".rm-ref").forEach((b) => b.addEventListener("click", () => openPanel(savedWork(b.dataset.ref))));

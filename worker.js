@@ -6,7 +6,7 @@
                       read with Instagram's official API
      /api/room/CODE   a room saved online under its save code
                       (GET opens it, PUT saves it)
-     /api/file/CODE/ID  a PDF in that room's library (GET, PUT, DELETE).
+     /api/file/CODE/ID  a PDF in that room's library, or a picture in its blog (GET, PUT, DELETE).
                       Only someone with the save code can reach it.
 
    The keys (access tokens) live in Cloudflare as secrets, never in
@@ -108,16 +108,23 @@ async function file(request, env, [code, id]) {
   if (!env.KV) return json({ error: "online saving isn't switched on" }, 503);
   const key = "file:" + code + ":" + id;
   if (request.method === "GET") {
-    const data = await env.KV.get(key, "arrayBuffer");
+    const got = await env.KV.getWithMetadata(key, "arrayBuffer");
+    const data = got && got.value;
     if (!data) return json({ error: "no such file" }, 404);
-    return new Response(data, { headers: { "content-type": "application/pdf", "cache-control": "private, no-store", "x-robots-tag": "noindex" } });
+    const type = (got.metadata && got.metadata.type) || "application/pdf";
+    return new Response(data, { headers: { "content-type": type, "cache-control": "private, no-store", "x-robots-tag": "noindex" } });
   }
   if (request.method === "PUT") {
     const data = await request.arrayBuffer();
     if (data.byteLength > FILE_MAX) return json({ error: "too big" }, 413);
-    const head = new Uint8Array(data.slice(0, 5));
-    if (String.fromCharCode(...head) !== "%PDF-") return json({ error: "not a PDF" }, 400);
-    await env.KV.put(key, data);
+    // a PDF (the library) or a picture (the blog): check the first bytes
+    const head = new Uint8Array(data.slice(0, 12));
+    const type = String.fromCharCode(...head.slice(0, 5)) === "%PDF-" ? "application/pdf"
+      : head[0] === 0xff && head[1] === 0xd8 ? "image/jpeg"
+      : head[0] === 0x89 && head[1] === 0x50 ? "image/png"
+      : String.fromCharCode(...head.slice(8, 12)) === "WEBP" ? "image/webp" : "";
+    if (!type) return json({ error: "not a PDF or a picture" }, 400);
+    await env.KV.put(key, data, { metadata: { type } });
     return json({ saved: new Date().toISOString() }, 200);
   }
   if (request.method === "DELETE") { await env.KV.delete(key); return json({ deleted: true }, 200); }

@@ -6,7 +6,7 @@
 
 /* the name across the top of the page: the plus platform, just a + for now.
    (click it to go to the home page) */
-const SITE_NAME = "+";
+const SITE_NAME = "+ studio blog project";
 
 /* where your own work comes from: your portfolio site. The strip of 2026
    work across the top reads that site's works.js + images, so it stays up
@@ -18,6 +18,8 @@ const PORTFOLIO = "https://trinitylester.trinityl-lester.workers.dev";
 /* the menu on the left: the four steps, in order. Each link is a page of
    the room (the part after # in the address). Add or rename pages here. */
 const MENU = [
+  { link: ["home", "home"] },
+  { link: ["blog", "blog"] },
   { step: "1 remembering", pages: [["bin", "inspiration list"], ["images", "images"], ["library", "library"]] },
   { step: "2 collecting", pages: [["picker", "color picker"], ["split", "splitscreen"]] },
   { step: "3 creating", pages: [["bank", "color bank"], ["ideas", "idea board"], ["order", "order of operations"]] },
@@ -65,7 +67,7 @@ function renderHeader() {
   const header = document.getElementById("site-header");
   if (!header) return;
   // each step shows just its name; hover (or tap) it and its pages drop down
-  const items = MENU.map((m) => `<div class="menu-step"><button type="button" class="menu-label">${m.step}</button><div class="menu-pages">${m.pages.map(([k, label]) =>
+  const items = MENU.map((m) => m.link ? `<a class="menu-link" href="#${m.link[0]}" data-page="${m.link[0]}">${m.link[1]}</a>` : `<div class="menu-step"><button type="button" class="menu-label">${m.step}</button><div class="menu-pages">${m.pages.map(([k, label]) =>
     `<a href="#${k}" data-page="${k}">${label}</a>`).join("")}</div></div>`).join("");
   header.innerHTML = `<div class="name-bar"><a href="#home">${SITE_NAME}</a></div><nav class="menu">${items}</nav>`;
   header.querySelectorAll(".menu-label").forEach((b) => b.addEventListener("click", () => {
@@ -80,7 +82,7 @@ function renderHeader() {
 // underline the page you're on
 function markMenu() {
   const h = decodeURIComponent(location.hash.slice(1));
-  const page = h.startsWith("artist/") ? "images" : h.startsWith("read/") ? "library" : h === "visit" ? "share" : h;
+  const page = h.startsWith("artist/") ? "images" : h.startsWith("read/") ? "library" : h === "visit" ? "blog" : h || "home";
   document.querySelectorAll("#site-header [data-page]").forEach((a) => a.classList.toggle("current", a.dataset.page === page));
   // the step you're in stays a little open so you can see where you are
   document.querySelectorAll("#site-header .menu-step").forEach((st) => {
