@@ -919,3 +919,28 @@ html.grid-always .room :is(.rm-idea, .rm-savebox, .rm-postbox, .rm-trail, .rm-li
 html.grid-always .room :is(.rm-compose, .rm-bpost) :is(p, h1, h2, h3, h4, label, ul, ol) { box-shadow: none; background-color: transparent; }
 @media (max-width: 760px) { .rm-bpics { margin: 0 -18px 12px; } .rm-cpic, .rm-cadd { width: 64px; height: 64px; } }
 .rm-bpics.n1 img { width: auto; height: auto; max-width: 100%; max-height: 75vh; margin: 0 auto; background: none; object-fit: contain; }
+
+/* ---------- the star: today's horoscope (star.js) ---------- */
+.rm-star {
+  position: fixed; z-index: 30; display: flex; align-items: center; justify-content: center;
+  font: 700 22px/1 "Courier New", ui-monospace, monospace; color: #000; background: #fff; padding-top: 6px;
+  animation: rm-twinkle 3.2s ease-in-out infinite;
+}
+.rm-star:hover { background: #000; color: #fff; animation: none; }
+@keyframes rm-twinkle { 0%, 100% { color: #000; } 50% { color: #b3b3b3; } }
+.rm-starpop {
+  position: fixed; z-index: 300; right: calc(var(--pad) + 30px); bottom: calc(var(--pad) + 30px); width: min(340px, calc(100vw - 40px));
+  max-height: 72vh; overflow-y: auto; background: #fff; border: 1px solid #cfcfcf; padding: 16px 18px 12px; line-height: 1.5;
+}
+.rm-starpop h3 { margin: 2px 0 2px; font-size: 16px; color: #000; }
+.rm-starpop .rm-x { position: absolute; top: 8px; right: 12px; }
+.rm-sblock { border-top: 1px solid var(--line); padding: 8px 0; }
+.rm-sblock b { color: #000; font-weight: var(--strong); }
+.rm-sfoot { margin: 8px 0 0; font-size: 11px; }
+.rm-sfoot button:hover { color: #000; text-decoration: underline; }
+#rm-sform { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+#rm-sform label { display: flex; justify-content: space-between; align-items: center; gap: 10px; color: var(--muted); }
+#rm-sform input { width: 190px; font: inherit; border: 1px solid var(--line); padding: 4px 6px; }
+.rm-splaces { list-style: none; margin: 0; padding: 0; }
+.rm-splaces button { display: flex; gap: 8px; width: 100%; text-align: left; padding: 3px 0; }
+.rm-splaces button:hover { color: #000; }
